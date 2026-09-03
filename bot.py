@@ -112,22 +112,28 @@ def initialize_database():
     connection.close()
 
 
-def add_entry(entry_id, title, category, content, tags=""):
-    """Add a wiki entry if it doesn't already exist."""
-
+def add_entry(
+    entry_id,
+    title,
+    category,
+    content,
+    tags="",
+    image_url=None
+):
     connection = sqlite3.connect(DATABASE)
     cursor = connection.cursor()
 
     cursor.execute("""
         INSERT OR IGNORE INTO wiki_entries
-        (id, title, category, content, tags)
-        VALUES (?, ?, ?, ?, ?)
+        (id, title, category, content, tags, image_url)
+        VALUES (?, ?, ?, ?, ?, ?)
     """, (
         entry_id,
         title,
         category,
         content,
-        tags
+        tags,
+        image_url
     ))
 
     connection.commit()
@@ -141,7 +147,7 @@ def get_entry(entry_id):
     cursor = connection.cursor()
 
     cursor.execute("""
-        SELECT id, title, category, content, tags
+        SELECT id, title, category, content, tags, image_url
         FROM wiki_entries
         WHERE id = ?
     """, (entry_id.lower(),))
@@ -151,6 +157,94 @@ def get_entry(entry_id):
     connection.close()
 
     return entry
+
+def migrate_database():
+    """Apply incremental database schema updates safely."""
+    connection = sqlite3.connect(DATABASE)
+    cursor = connection.cursor()
+
+    # --------------------------------------------------
+    # Add image_url to wiki_entries if it does not exist
+    # --------------------------------------------------
+
+    cursor.execute("""
+        PRAGMA table_info(wiki_entries)
+    """)
+
+    columns = {
+        row[1]
+        for row in cursor.fetchall()
+    }
+
+    if "image_url" not in columns:
+        cursor.execute("""
+            ALTER TABLE wiki_entries
+            ADD COLUMN image_url TEXT
+        """)
+
+    # --------------------------------------------------
+    # Create category registry
+    # --------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS wiki_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            description TEXT,
+            icon TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    connection.commit()
+    connection.close()
+
+def initialize_categories():
+    """Create the default Codex categories if they do not exist."""
+    connection = sqlite3.connect(DATABASE)
+    cursor = connection.cursor()
+
+    categories = [
+        (
+            "World",
+            "World-level lore and foundational information.",
+            "🌎",
+            10
+        ),
+        (
+            "Location",
+            "Places, regions, settlements, and geographic features.",
+            "📍",
+            20
+        ),
+        (
+            "NPC",
+            "Non-player characters and notable individuals.",
+            "👤",
+            30
+        ),
+        (
+            "Faction",
+            "Organizations, factions, and political groups.",
+            "⚔️",
+            40
+        ),
+        (
+            "Bestiary",
+            "Creatures and monsters encountered in the world.",
+            "🐉",
+            50
+        )
+    ]
+
+    cursor.executemany("""
+        INSERT OR IGNORE INTO wiki_categories
+        (name, description, icon, sort_order)
+        VALUES (?, ?, ?, ?)
+    """, categories)
+
+    connection.commit()
+    connection.close()
 
 # --------------------------------------------------
 # Tag Discovery
@@ -301,34 +395,34 @@ def update_entry(
     title,
     category,
     content,
-    tags
+    tags="",
+    image_url=None
 ):
-    """Update an existing wiki entry."""
-
     connection = sqlite3.connect(DATABASE)
     cursor = connection.cursor()
 
     cursor.execute("""
         UPDATE wiki_entries
-        SET title = ?,
+        SET
+            title = ?,
             category = ?,
             content = ?,
-            tags = ?
+            tags = ?,
+            image_url = ?
         WHERE id = ?
     """, (
         title,
         category,
         content,
         tags,
+        image_url,
         entry_id
     ))
-
-    changed = cursor.rowcount > 0
 
     connection.commit()
     connection.close()
 
-    return changed
+    return cursor.rowcount > 0
 
 
 def delete_entry(entry_id):
@@ -677,6 +771,8 @@ def make_tag_state(tag: str):
 # --------------------------------------------------
 
 initialize_database()
+migrate_database()
+initialize_categories()
 
 add_entry(
     "setting",
@@ -2677,13 +2773,16 @@ async def display_wiki_entry(
     if history is None:
         history = []
 
-    entry_id, title, category, content, tags = entry
+    entry_id, title, category, content, tags, image_url = entry
 
     embed = discord.Embed(
         title=title,
         description=content,
         color=discord.Color.blurple()
     )
+
+    if image_url:
+        embed.set_image(url=image_url)
 
     # --------------------------------------------------
     # Category
@@ -2800,13 +2899,16 @@ async def wiki(
 
         return
 
-    entry_id, title, category, content, tags = entry
+    entry_id, title, category, content, tags, image_url = entry
 
     embed = discord.Embed(
         title=title,
         description=content,
         color=discord.Color.blurple()
     )
+
+    if image_url:
+        embed.set_image(url=image_url)
 
     # --------------------------------------------------
     # Category
@@ -3252,8 +3354,9 @@ class WikiAddModal(discord.ui.Modal):
         title = self.title_input.value.strip()
         category = self.category.value.strip()
         tags = self.tags.value.strip()
-        content = self.content.value.strip()
 
+        content = self.content.value.strip()
+        
         existing = get_entry(entry_id)
 
         if existing is not None:
@@ -3272,7 +3375,7 @@ class WikiAddModal(discord.ui.Modal):
             category,
             content,
             tags
-        )
+        )  
 
         await interaction.response.send_message(
             f"✅ Wiki entry **{title}** created.\n\n"
@@ -3315,7 +3418,7 @@ class WikiEditModal(discord.ui.Modal):
             title="Edit Wiki Entry"
         )
 
-        entry_id, title, category, content, tags = entry
+        entry_id, title, category, content, tags, image_url = entry
 
         self.entry_id_value = entry_id
 
@@ -3340,6 +3443,14 @@ class WikiEditModal(discord.ui.Modal):
             max_length=500
         )
 
+        self.image_url = discord.ui.TextInput(
+            label="Image URL (optional)",
+            placeholder="https://example.com/image.jpg",
+            default=image_url or "",
+            required=False,
+            max_length=1000
+        )
+
         self.content = discord.ui.TextInput(
             label="Content",
             default=content,
@@ -3351,6 +3462,7 @@ class WikiEditModal(discord.ui.Modal):
         self.add_item(self.title_input)
         self.add_item(self.category)
         self.add_item(self.tags)
+        self.add_item(self.image_url)
         self.add_item(self.content)
 
     async def on_submit(
@@ -3361,14 +3473,23 @@ class WikiEditModal(discord.ui.Modal):
         title = self.title_input.value.strip()
         category = self.category.value.strip()
         tags = self.tags.value.strip()
+        image_url = self.image_url.value.strip()
         content = self.content.value.strip()
+
+        if image_url and not image_url.lower().startswith("https://"):
+            await interaction.response.send_message(
+                "The image URL must begin with https://",
+                ephemeral=True
+            )
+            return
 
         success = update_entry(
             self.entry_id_value,
             title,
             category,
             content,
-            tags
+            tags,
+            image_url
         )
 
         if not success:
@@ -3560,7 +3681,7 @@ async def wiki_delete(
 
         return
 
-    entry_id, title, category, content, tags = entry
+    entry_id, title, category, content, tags, image_url = entry
 
     embed = discord.Embed(
         title="⚠️ Delete Wiki Entry?",
@@ -4340,7 +4461,7 @@ class WikiSearchResultView(discord.ui.View):
 
         if self.mode == "delete":
 
-            entry_id, title, category, content, tags = entry
+            entry_id, title, category, content, tags, image_url = entry
 
             embed = discord.Embed(
                 title="⚠️ Delete Wiki Entry?",

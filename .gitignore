@@ -2,3 +2,17 @@
 wiki.db
 __pycache__/
 *.pyc
+
+# Local database backups
+wiki-pre-category-migration.db
+
+# Local artwork / assets
+CoA_Banner.png
+CoA_Logo.png
+CoA_Logo128x128.ico
+
+# Windows metadata
+desktop.ini
+
+# Local credentials
+github_token.txt
