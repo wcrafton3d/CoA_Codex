@@ -317,7 +317,7 @@ first, then open the editor).
 
 ## 14. Phase 3A --- Dynamic Category Display
 
-**Status: COMPLETE --- user accepted the live-test checkpoint on 2026-09-08. Changes remain uncommitted and not deployed.**
+**Status: COMPLETE and deployed on 2026-09-08. User accepted the live-test checkpoint; production startup, database, and helper checks passed.**
 
 This is the exact handoff checkpoint as of 2026-09-08.
 
@@ -439,14 +439,37 @@ for registered Bestiary. No category or entry was created or deleted,
 and no database was modified for this simulation. Local Bestiary already
 has an entry, so this was not an empty-category live test.
 
-### Next checkpoint
+### Deployment checkpoint --- 2026-09-08
 
-Review the focused `bot.py` diff and this updated context document before
-commit. `PROJECT_CONTEXT.md` is currently untracked and should be included
-in the reviewed commit. No commit, push, or deployment has been performed
-for Phase 3A. Restarting OCI restored the existing production version;
-it did not deploy the local changes. Follow Section 18 for deployment
-following review, then proceed to Phase 3B as a separate small step.
+-   Feature commit: `f2c71bc60dab421b007c10763546912ed063c897`
+    (`Integrate category registry display and record Phase 3A checkpoint`).
+    It includes `bot.py` and the newly tracked `PROJECT_CONTEXT.md`, and
+    was pushed to GitHub `main` before deployment.
+-   A consistent SQLite backup was created using `sqlite3.Connection.backup`
+    and passed integrity verification:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3a-20260908-194347.db`.
+-   OCI's HTTPS `git pull` could not authenticate noninteractively.
+    Deployment therefore used a verified Git bundle of the pushed `main`
+    commit, transferred over SSH, fetched on OCI, and merged with
+    `--ff-only`. No GitHub credentials were added to the VM. The usual
+    HTTPS pull procedure requires authentication to be resolved before
+    reuse; the SSH bundle procedure is an available fallback.
+-   Production syntax compilation passed; `coa-codex.service` restarted
+    successfully and reconnected to the Discord gateway.
+-   Read-only post-deployment checks passed: SQLite integrity, `image_url`
+    column, expected registry order, and Bestiary's dragon icon. Production
+    retained 12 entries and 19 relationships, matching the backup.
+-   Production Bestiary has zero entries; unlike the local test database,
+    it should show the ephemeral no-entries response when clicked. No
+    production Discord UI test was completed by automation; helper checks
+    do not replace a visual production check.
+-   The production checkout already had untracked `.venv/` and the Phase 2
+    backup; the new Phase 3A backup is also untracked and must not be staged.
+    Fetching a bundle does not refresh OCI's `origin/main` tracking ref;
+    compare the actual `HEAD` with the pushed commit when checking parity.
+
+Phase 3B is the next implementation step. Keep unused `CATEGORY_ICONS`
+cleanup separate from this deployed feature.
 
 ## 15. Proposed Phase 3 roadmap after 3A
 
@@ -663,13 +686,13 @@ As of 2026-09-08:
 -   Phase 3A local DB check: **passed**
 -   Phase 3A: **complete; user accepted the live Bestiary button check**
 -   See Section 14 for live versus offline verification scope and empty-category behavior.
--   Phase 3A changes: **uncommitted; not deployed**
--   `PROJECT_CONTEXT.md`: **updated and untracked; include in the reviewed commit**
--   Local bot: **stopped**; OCI: **restored, with restart also reported by the user**.
+-   Phase 3A changes: **committed, pushed, and deployed; see Section 14**
+-   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3A deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 3A code and context document before commit/deployment. Phase 3B remains the next implementation step.
+**Next development action:** Phase 3B category database helpers, as a separate small step. A visual production check of `/wiki-home` remains useful, especially the empty Bestiary response.
 
 ## 26. Maintenance rule
 
