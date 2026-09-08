@@ -627,17 +627,15 @@ def get_relationships(
     return results
 
 def get_categories():
-    """Return all distinct wiki categories."""
+    """Return all registered Codex categories."""
 
     connection = sqlite3.connect(DATABASE)
     cursor = connection.cursor()
 
     cursor.execute("""
-        SELECT DISTINCT category
-        FROM wiki_entries
-        WHERE category IS NOT NULL
-          AND TRIM(category) != ''
-        ORDER BY category COLLATE NOCASE
+        SELECT name
+        FROM wiki_categories
+        ORDER BY sort_order, name COLLATE NOCASE
     """)
 
     categories = [
@@ -707,12 +705,25 @@ CATEGORY_ICONS = {
 }
 
 def get_category_icon(category: str) -> str:
-    """Return an appropriate icon for a wiki category."""
+    """Return the registered icon for a Codex category."""
 
-    return CATEGORY_ICONS.get(
-        category.strip().lower(),
-        "📚"
-    )
+    connection = sqlite3.connect(DATABASE)
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT icon
+        FROM wiki_categories
+        WHERE name = ? COLLATE NOCASE
+    """, (category,))
+
+    row = cursor.fetchone()
+
+    connection.close()
+
+    if row and row[0]:
+        return row[0]
+
+    return "📚"
 
 # --------------------------------------------------
 # Navigation State
