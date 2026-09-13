@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 
 FUNCTIONS = {
-    "initialize_database", "migrate_database", "initialize_categories",
+    "initialize_database", "migrate_database", "initialize_seed_content",
     "get_category", "category_exists", "get_category_entry_count",
     "_validate_category_fields", "create_category", "update_category",
     "delete_category", "get_categories", "get_category_icon",
@@ -36,8 +36,9 @@ class CategoryRegistryTests(unittest.TestCase):
         self.database = str(Path(self.temp.name) / "test.db")
         self.ns = {"sqlite3": sqlite3, "DATABASE": self.database}
         exec(compile(HELPERS, str(SOURCE), "exec"), self.ns)
-        for name in ("initialize_database", "migrate_database", "initialize_categories"):
+        for name in ("initialize_database", "migrate_database", "initialize_seed_content"):
             self.ns[name]()
+        self.sql("DELETE FROM wiki_entries")
 
     def call(self, name, *args, **kwargs):
         return self.ns[name](*args, **kwargs)
@@ -146,7 +147,7 @@ class CategoryRegistryTests(unittest.TestCase):
         self.assertEqual(self.call("delete_category", " CUSTOM "), "success")
         self.assertEqual(self.call("delete_category", "Custom"), "not_found")
         self.assertNotIn("Custom", self.call("get_categories"))
-        self.call("initialize_categories")
+        self.call("initialize_seed_content")
         self.assertFalse(self.call("category_exists", "Custom"))
         self.assertEqual(self.sql("PRAGMA integrity_check"), [("ok",)])
 

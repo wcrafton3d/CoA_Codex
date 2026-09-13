@@ -77,39 +77,56 @@ intents.members = True
 # --------------------------------------------------
 
 def initialize_database():
-    """Create the database and wiki tables if they don't exist."""
+    """Create tables and record whether this database needs first-run content.
 
+    A pre-existing entries table means an existing installation, even if
+    empty: never infer first-run status from row counts or restore deletions.
+    """
     connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.cursor()
+            existing = cursor.execute("""
+                SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'wiki_entries'
+            """).fetchone() is not None
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_entries (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    tags TEXT
+                )
+            """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS wiki_entries (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL,
-            content TEXT NOT NULL,
-            tags TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS wiki_relationships (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            source_id TEXT NOT NULL,
-            relationship TEXT NOT NULL,
-            target_id TEXT NOT NULL,
-            FOREIGN KEY (source_id)
-                REFERENCES wiki_entries(id)
-                ON DELETE CASCADE,
-            FOREIGN KEY (target_id)
-                REFERENCES wiki_entries(id)
-                ON DELETE CASCADE,
-            UNIQUE(source_id, relationship, target_id)
-        )
-    """)
-
-    connection.commit()
-    connection.close()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_relationships (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_id TEXT NOT NULL,
+                    relationship TEXT NOT NULL,
+                    target_id TEXT NOT NULL,
+                    FOREIGN KEY (source_id)
+                        REFERENCES wiki_entries(id)
+                        ON DELETE CASCADE,
+                    FOREIGN KEY (target_id)
+                        REFERENCES wiki_entries(id)
+                        ON DELETE CASCADE,
+                    UNIQUE(source_id, relationship, target_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_bootstrap (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    state TEXT NOT NULL CHECK (state IN ('pending', 'complete'))
+                )
+            """)
+            cursor.execute("""
+                INSERT OR IGNORE INTO wiki_bootstrap (id, state) VALUES (1, ?)
+            """, ('complete' if existing else 'pending',))
+    finally:
+        connection.close()
 
 
 def add_entry(
@@ -199,10 +216,8 @@ def migrate_database():
     connection.commit()
     connection.close()
 
-def initialize_categories():
-    """Create the default Codex categories if they do not exist."""
-    connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
+def initialize_seed_content():
+    """Seed categories and starter entries once, only for a new database."""
 
     categories = [
         (
@@ -237,14 +252,72 @@ def initialize_categories():
         )
     ]
 
-    cursor.executemany("""
-        INSERT OR IGNORE INTO wiki_categories
-        (name, description, icon, sort_order)
-        VALUES (?, ?, ?, ?)
-    """, categories)
+    entries = [
+        (
+            'setting',
+            'The Setting',
+            'World',
+            'This is the beginning of our tabletop RPG setting. The world is '
+            'waiting to be defined.',
+            'world, overview, setting',
+        ),
+        (
+            'history',
+            'History',
+            'World',
+            'The history of the world will be documented here.',
+            'world, history',
+        ),
+        (
+            'blackwood',
+            'Blackwood Forest',
+            'Location',
+            'Blackwood is an ancient forest whose history and secrets will '
+            'eventually be documented here.',
+            'location, forest, wilderness',
+        ),
+        (
+            'aldren',
+            'Aldren Voss',
+            'NPC',
+            'Aldren Voss is a character whose history and role in the setting'
+            ' will eventually be documented here.',
+            'character, npc',
+        ),
+        (
+            'iron-covenant',
+            'Iron Covenant',
+            'Faction',
+            'The Iron Covenant is a faction whose history, goals, and '
+            'membership will eventually be documented here.',
+            'faction, military',
+        ),
+    ]
 
-    connection.commit()
-    connection.close()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT state FROM wiki_bootstrap WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Database bootstrap state is missing.")
+            if row[0] == 'complete':
+                return
+            connection.executemany("""
+                INSERT OR IGNORE INTO wiki_categories
+                (name, description, icon, sort_order) VALUES (?, ?, ?, ?)
+            """, categories)
+            connection.executemany("""
+                INSERT OR IGNORE INTO wiki_entries
+                (id, title, category, content, tags) VALUES (?, ?, ?, ?, ?)
+            """, entries)
+            connection.execute(
+                "UPDATE wiki_bootstrap SET state = 'complete' WHERE id = 1"
+            )
+    finally:
+        connection.close()
 
 # --------------------------------------------------
 # Tag Discovery
@@ -928,52 +1001,7 @@ def make_tag_state(tag: str):
 
 initialize_database()
 migrate_database()
-initialize_categories()
-
-add_entry(
-    "setting",
-    "The Setting",
-    "World",
-    "This is the beginning of our tabletop RPG setting. "
-    "The world is waiting to be defined.",
-    "world, overview, setting"
-)
-
-add_entry(
-    "history",
-    "History",
-    "World",
-    "The history of the world will be documented here.",
-    "world, history"
-)
-
-add_entry(
-    "blackwood",
-    "Blackwood Forest",
-    "Location",
-    "Blackwood is an ancient forest whose history and secrets "
-    "will eventually be documented here.",
-    "location, forest, wilderness"
-)
-
-add_entry(
-    "aldren",
-    "Aldren Voss",
-    "NPC",
-    "Aldren Voss is a character whose history and role in "
-    "the setting will eventually be documented here.",
-    "character, npc"
-)
-
-add_entry(
-    "iron-covenant",
-    "Iron Covenant",
-    "Faction",
-    "The Iron Covenant is a faction whose history, goals, "
-    "and membership will eventually be documented here.",
-    "faction, military"
-)
-
+initialize_seed_content()
 
 # --------------------------------------------------
 # Permission Check

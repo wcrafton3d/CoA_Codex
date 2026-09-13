@@ -193,10 +193,18 @@ The application contains:
 
 -   `initialize_database()`
 -   `migrate_database()`
--   `initialize_categories()`
+-   `initialize_seed_content()` (replaces `initialize_categories()` in the
+    local startup-seeding checkpoint)
 
-`initialize_categories()` uses `INSERT OR IGNORE`, allowing defaults to
-be seeded without overwriting existing category rows.
+The local startup-seeding checkpoint adds `wiki_bootstrap`, with a single
+row (`id=1`) and state `pending` or `complete`. `initialize_database()`
+creates this record transactionally with the base tables. An existing
+`wiki_entries` table means an existing installation, even when empty, and
+is adopted as complete without restoring any starter content. A genuinely
+new database is pending. `initialize_seed_content()` inserts starter
+categories and entries and marks completion in one transaction. Failed
+seeding rolls back and retries at the next startup. See Section 15 for
+review/deployment status; production still uses the older seeding behavior.
 
 Migrations must remain safe for existing production data.
 
@@ -521,7 +529,7 @@ category deletion persistence, and competing-writer exclusion. All 11 tests
 passed; source syntax and diff whitespace checks also passed. During local development, neither bot was started and neither real database
 was changed. Deployment verification is recorded below.
 
-**Before Phase 3C exposes mutations:** existing startup code still runs
+**Limitation in deployed Phase 3B (addressed by the local checkpoint below):** startup code still runs
 `initialize_categories()` with `INSERT OR IGNORE` on every launch, so
 renamed/deleted default category names will be re-created on restart.
 Startup also seeds fixed entries with default category strings. Resolve
@@ -545,6 +553,33 @@ but does not prevent a later free-form entry from reusing a deleted name.
     the backup: 13 entries, 19 relationships, and five categories.
 -   No Discord UI changes or production category mutations were made.
     The startup-seeding limitation above remains the next development step.
+
+### Startup seeding checkpoint --- 2026-09-13
+
+**Status: IMPLEMENTED LOCALLY; 19 tests passed; not committed or deployed.**
+
+-   Replaced repeated default-category and fixed-entry insertion with
+    `initialize_seed_content()`, controlled by `wiki_bootstrap` (Section 8).
+    The five starter categories and five starter entry values are unchanged.
+-   Existing installations are adopted without content changes, including
+    empty installations and those missing previously deleted defaults.
+    Registry renames/deletions and fixed-entry edits/deletions therefore
+    survive restarts. New databases receive starter content exactly once.
+-   An old database with entries but no registry gets an empty registry
+    through schema migration; no categories are inferred or seeded. Such
+    installations require a separate category-registration decision. This
+    does not affect the current production database with its five categories.
+-   Eight restart/migration tests plus all 11 Phase 3B tests pass against
+    temporary databases. Coverage includes adoption, empty databases,
+    retained renames/deletions/images/relationships, first-run interruption,
+    transaction rollback/retry, and older entry-schema migration.
+-   No real database was migrated and neither bot was started for this
+    local checkpoint. Syntax and diff checks passed. Review before commit
+    or deployment; take a fresh production backup before applying this new
+    metadata table, then verify all application rows are unchanged.
+-   Downgrading to older bot code restores its repeated-seeding behavior;
+    the new completion record cannot prevent an older version from seeding.
+    Keep this in mind before permitting category mutations through Discord.
 
 ### Phase 3C --- Category management commands/UI
 
@@ -753,7 +788,7 @@ As of 2026-09-13:
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** resolve default-category and fixed-entry startup seeding in a separate tested checkpoint before exposing rename/delete in Phase 3C. Phase 3B is deployed; Phase 3A production visual verification is complete.
+**Next development action:** review the local startup-seeding checkpoint before commit/deployment. Phase 3C management UI follows after this prerequisite is accepted. Phase 3B remains the deployed version.
 
 ## 26. Maintenance rule
 
