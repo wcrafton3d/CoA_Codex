@@ -194,9 +194,9 @@ The application contains:
 -   `initialize_database()`
 -   `migrate_database()`
 -   `initialize_seed_content()` (replaces `initialize_categories()` in the
-    local startup-seeding checkpoint)
+    deployed startup-seeding checkpoint)
 
-The local startup-seeding checkpoint adds `wiki_bootstrap`, with a single
+The deployed startup-seeding checkpoint adds `wiki_bootstrap`, with a single
 row (`id=1`) and state `pending` or `complete`. `initialize_database()`
 creates this record transactionally with the base tables. An existing
 `wiki_entries` table means an existing installation, even when empty, and
@@ -204,7 +204,7 @@ is adopted as complete without restoring any starter content. A genuinely
 new database is pending. `initialize_seed_content()` inserts starter
 categories and entries and marks completion in one transaction. Failed
 seeding rolls back and retries at the next startup. See Section 15 for
-review/deployment status; production still uses the older seeding behavior.
+deployment verification; production uses this once-only seeding behavior.
 
 Migrations must remain safe for existing production data.
 
@@ -529,7 +529,7 @@ category deletion persistence, and competing-writer exclusion. All 11 tests
 passed; source syntax and diff whitespace checks also passed. During local development, neither bot was started and neither real database
 was changed. Deployment verification is recorded below.
 
-**Limitation in deployed Phase 3B (addressed by the local checkpoint below):** startup code still runs
+**Historical Phase 3B limitation (fixed by the deployed checkpoint below):** startup code ran
 `initialize_categories()` with `INSERT OR IGNORE` on every launch, so
 renamed/deleted default category names will be re-created on restart.
 Startup also seeds fixed entries with default category strings. Resolve
@@ -552,11 +552,11 @@ but does not prevent a later free-form entry from reusing a deleted name.
 -   Post-deployment SQLite integrity passed. Every application row matched
     the backup: 13 entries, 19 relationships, and five categories.
 -   No Discord UI changes or production category mutations were made.
-    The startup-seeding limitation above remains the next development step.
+    The startup-seeding limitation was addressed by the subsequent checkpoint below.
 
 ### Startup seeding checkpoint --- 2026-09-13
 
-**Status: IMPLEMENTED LOCALLY; 19 tests passed; not committed or deployed.**
+**Status: COMPLETE and deployed on 2026-09-13; all 19 tests passed locally and on OCI.**
 
 -   Replaced repeated default-category and fixed-entry insertion with
     `initialize_seed_content()`, controlled by `wiki_bootstrap` (Section 8).
@@ -573,10 +573,15 @@ but does not prevent a later free-form entry from reusing a deleted name.
     temporary databases. Coverage includes adoption, empty databases,
     retained renames/deletions/images/relationships, first-run interruption,
     transaction rollback/retry, and older entry-schema migration.
--   No real database was migrated and neither bot was started for this
-    local checkpoint. Syntax and diff checks passed. Review before commit
-    or deployment; take a fresh production backup before applying this new
-    metadata table, then verify all application rows are unchanged.
+-   Local development used only temporary databases. After review, feature commit `56baa891b84ff1bfe23e6d27a6adea3e8f12a01a` was pushed to GitHub and deployed through the verified SSH Git-bundle procedure.
+-   Production backup (SQLite backup API; integrity verified):
+    `/home/ubuntu/CoA_Codex/wiki-before-startup-seeding-20260913-213359.db`.
+-   Production syntax and all 19 temporary-database tests passed before
+    service restart. OCI is active and reconnected to Discord; no local
+    bot was running. `wiki_bootstrap` contains exactly `(1, 'complete')`.
+-   Post-deployment integrity passed and every application row matched the
+    backup: 13 entries, 19 relationships, and five categories. No starter
+    content was added to the existing production installation.
 -   Downgrading to older bot code restores its repeated-seeding behavior;
     the new completion record cannot prevent an older version from seeding.
     Keep this in mind before permitting category mutations through Discord.
@@ -788,7 +793,7 @@ As of 2026-09-13:
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the local startup-seeding checkpoint before commit/deployment. Phase 3C management UI follows after this prerequisite is accepted. Phase 3B remains the deployed version.
+**Next development action:** Phase 3C category management commands/UI. The startup-seeding prerequisite is committed, pushed, deployed, and verified.
 
 ## 26. Maintenance rule
 
