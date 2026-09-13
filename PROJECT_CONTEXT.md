@@ -1,6 +1,6 @@
 # CoA Codex --- Project Context
 
-**Last updated:** 2026-09-08\
+**Last updated:** 2026-09-13\
 **Repository:** `https://github.com/wcrafton3d/CoA_Codex.git`\
 **Application:** Discord fantasy-world Codex/wiki bot\
 **Stack:** Python, discord.py, SQLite
@@ -459,32 +459,77 @@ has an entry, so this was not an empty-category live test.
 -   Read-only post-deployment checks passed: SQLite integrity, `image_url`
     column, expected registry order, and Bestiary's dragon icon. Production
     retained 12 entries and 19 relationships, matching the backup.
--   Production Bestiary has zero entries; unlike the local test database,
-    it should show the ephemeral no-entries response when clicked. No
-    production Discord UI test was completed by automation; helper checks
-    do not replace a visual production check.
+-   Production Bestiary has zero entries. After deployment, the user
+    completed the visual `/wiki-home` check and confirmed that the Bestiary
+    button is present and displays the expected "no entries" response.
+    This confirms the empty-category behavior live in production; the
+    visual verification was performed manually, not by automation.
 -   The production checkout already had untracked `.venv/` and the Phase 2
     backup; the new Phase 3A backup is also untracked and must not be staged.
     Fetching a bundle does not refresh OCI's `origin/main` tracking ref;
     compare the actual `HEAD` with the pushed commit when checking parity.
 
-Phase 3B is the next implementation step. Keep unused `CATEGORY_ICONS`
+Phase 3B is implemented locally (see Section 15). Keep unused `CATEGORY_ICONS`
 cleanup separate from this deployed feature.
 
 ## 15. Proposed Phase 3 roadmap after 3A
 
 ### Phase 3B --- Category database helpers
 
-Implement/test explicit operations for:
+**Status: IMPLEMENTED LOCALLY; 11 database tests passed on 2026-09-13.
+Not committed or deployed. Review is the next checkpoint.**
 
--   category details
--   existence validation
--   create category
--   update category
--   category entry count
--   guarded deletion
+New helpers in `bot.py`:
 
-Prefer helper/database correctness before UI wiring.
+-   `get_category(category)` returns `(id, name, description, icon,
+    sort_order)` or `None` if missing.
+-   `category_exists(category)` returns a boolean, including `True` for
+    registered categories with no entries.
+-   `get_category_entry_count(category)` returns an integer (`0` for an
+    empty category), or `None` for an unregistered category.
+-   `create_category(name, description=None, icon=None, sort_order=0)`
+    returns `success` or `duplicate`.
+-   `update_category(category, name, description, icon, sort_order)`
+    replaces all fields, returning `success`, `not_found`, or `duplicate`.
+    All replacement fields are required; `None` clears description/icon.
+    Renames preserve the registry ID and atomically update matching entry
+    category strings, including case-only renames. Content, images, tags,
+    entry IDs, and relationships are preserved.
+-   `delete_category(category)` returns `success`, `not_found`, or `in_use`.
+    It refuses deletion if any matching entry exists. A write lock covers
+    the usage check and deletion to prevent an intervening write.
+
+Names are trimmed and compared using SQLite `COLLATE NOCASE` (ASCII
+case-insensitivity, matching the existing schema). New names must contain
+1–50 characters, matching the current entry modal's category limit.
+Descriptions/icons accept text or `None`; sort order must be a signed
+64-bit integer, not a boolean. Invalid fields raise `ValueError`;
+unexpected SQLite errors propagate after rollback and connection cleanup.
+Future UI callers must handle those errors and enforce Worldbuilder roles.
+
+The existing display helpers and query tuple shapes are unchanged. No
+schema migration or Discord UI wiring was introduced. Category helpers
+are not yet called by the management panel or entry authoring flows.
+
+Tests: `python -m unittest discover -s tests -v`, using an available Python
+interpreter. This checkpoint used bundled Python 3.12.14. The standard-library
+suite in `tests/test_category_registry.py` extracts only named function
+definitions from `bot.py`, avoiding its import-time Discord startup and
+`.env` access, and runs the real schema initializers on temporary databases.
+It covers missing/empty categories, validation, duplicates, ordering/icons,
+renames and data preservation, rollback failures, guarded deletion, custom
+category deletion persistence, and competing-writer exclusion. All 11 tests
+passed; source syntax and diff whitespace checks also passed. Neither bot
+was started and no local or production database was changed during Phase 3B.
+
+**Before Phase 3C exposes mutations:** existing startup code still runs
+`initialize_categories()` with `INSERT OR IGNORE` on every launch, so
+renamed/deleted default category names will be re-created on restart.
+Startup also seeds fixed entries with default category strings. Resolve
+that startup policy in a separate tested checkpoint before offering default
+category rename/delete in Discord. Phase 3E must also validate entry writes
+against the registry: the deletion lock prevents a write during the check,
+but does not prevent a later free-form entry from reusing a deleted name.
 
 ### Phase 3C --- Category management commands/UI
 
@@ -676,7 +721,7 @@ behavior.
 
 ## 25. Immediate handoff summary
 
-As of 2026-09-08:
+As of 2026-09-13:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
@@ -687,12 +732,17 @@ As of 2026-09-08:
 -   Phase 3A: **complete; user accepted the live Bestiary button check**
 -   See Section 14 for live versus offline verification scope and empty-category behavior.
 -   Phase 3A changes: **committed, pushed, and deployed; see Section 14**
+-   Phase 3B helpers: **implemented locally; 11 tests passed; uncommitted,
+    not deployed**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3A deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** Phase 3B category database helpers, as a separate small step. A visual production check of `/wiki-home` remains useful, especially the empty Bestiary response.
+**Next development action:** review the Phase 3B code/tests and context
+changes before commit or deployment. Resolve default-category startup
+seeding before exposing rename/delete in Phase 3C. Phase 3A production
+visual verification is complete.
 
 ## 26. Maintenance rule
 

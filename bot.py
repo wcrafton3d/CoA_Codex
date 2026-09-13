@@ -626,6 +626,151 @@ def get_relationships(
 
     return results
 
+def get_category(category: str):
+    """Return (id, name, description, icon, sort_order), or None.
+
+    Names are trimmed and compared using the registry's SQLite NOCASE
+    rules (ASCII case-insensitivity).
+    """
+    connection = sqlite3.connect(DATABASE)
+    try:
+        return connection.execute("""
+            SELECT id, name, description, icon, sort_order
+            FROM wiki_categories
+            WHERE name = ? COLLATE NOCASE
+        """, (category.strip(),)).fetchone()
+    finally:
+        connection.close()
+
+
+def category_exists(category: str) -> bool:
+    """Whether the trimmed name is registered, including empty categories."""
+    return get_category(category) is not None
+
+
+def get_category_entry_count(category: str):
+    """Return an entry count, or None if the category is not registered."""
+    connection = sqlite3.connect(DATABASE)
+    try:
+        row = connection.execute("""
+            SELECT COUNT(e.id)
+            FROM wiki_categories AS c
+            LEFT JOIN wiki_entries AS e
+                ON e.category = c.name COLLATE NOCASE
+            WHERE c.name = ? COLLATE NOCASE
+            GROUP BY c.id
+        """, (category.strip(),)).fetchone()
+        return row[0] if row is not None else None
+    finally:
+        connection.close()
+
+
+def _validate_category_fields(name, description, icon, sort_order):
+    """Reject invalid fields before opening a write transaction."""
+    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 50:
+        raise ValueError("Category names must contain 1 to 50 characters.")
+    if description is not None and not isinstance(description, str):
+        raise ValueError("Category description must be text or None.")
+    if icon is not None and not isinstance(icon, str):
+        raise ValueError("Category icon must be text or None.")
+    if type(sort_order) is not int or not -(2 ** 63) <= sort_order < 2 ** 63:
+        raise ValueError("Category sort order must be a SQLite integer.")
+
+
+def create_category(name, description=None, icon=None, sort_order=0) -> str:
+    """Create a category; return 'success' or 'duplicate'.
+
+    Invalid fields raise ValueError; unexpected SQLite errors propagate.
+    """
+    _validate_category_fields(name, description, icon, sort_order)
+    name = name.strip()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("""
+                SELECT 1 FROM wiki_categories WHERE name = ? COLLATE NOCASE
+            """, (name,)).fetchone():
+                return "duplicate"
+            connection.execute("""
+                INSERT INTO wiki_categories (name, description, icon, sort_order)
+                VALUES (?, ?, ?, ?)
+            """, (name, description, icon, sort_order))
+        return "success"
+    finally:
+        connection.close()
+
+
+def update_category(category, name, description, icon, sort_order) -> str:
+    """Replace all category fields and atomically reassign matching entries.
+
+    Return 'success', 'not_found', or 'duplicate'. All replacement fields
+    are required; None clears description/icon. Validation and database
+    errors follow create_category(). The category's numeric ID is stable.
+    """
+    _validate_category_fields(name, description, icon, sort_order)
+    name = name.strip()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT id, name FROM wiki_categories
+                WHERE name = ? COLLATE NOCASE
+            """, (category.strip(),)).fetchone()
+            if row is None:
+                return "not_found"
+            category_id, old_name = row
+            if connection.execute("""
+                SELECT 1 FROM wiki_categories
+                WHERE name = ? COLLATE NOCASE AND id != ?
+            """, (name, category_id)).fetchone():
+                return "duplicate"
+            connection.execute("""
+                UPDATE wiki_categories
+                SET name = ?, description = ?, icon = ?, sort_order = ?
+                WHERE id = ?
+            """, (name, description, icon, sort_order, category_id))
+            connection.execute("""
+                UPDATE wiki_entries SET category = ?
+                WHERE category = ? COLLATE NOCASE
+            """, (name, old_name))
+        return "success"
+    finally:
+        connection.close()
+
+
+def delete_category(category: str) -> str:
+    """Return 'success', 'not_found', or 'in_use'; never delete entries.
+
+    Hold the write lock across the usage check and deletion. This prevents
+    another writer from adding entries between those two operations.
+    Entry authoring still needs registry validation in Phase 3E.
+    """
+    connection = sqlite3.connect(DATABASE)
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT id, name FROM wiki_categories
+                WHERE name = ? COLLATE NOCASE
+            """, (category.strip(),)).fetchone()
+            if row is None:
+                return "not_found"
+            category_id, name = row
+            if connection.execute("""
+                SELECT 1 FROM wiki_entries
+                WHERE category = ? COLLATE NOCASE LIMIT 1
+            """, (name,)).fetchone():
+                return "in_use"
+            connection.execute(
+                "DELETE FROM wiki_categories WHERE id = ?", (category_id,)
+            )
+        return "success"
+    finally:
+        connection.close()
+
+
 def get_categories():
     """Return all registered Codex categories."""
 
