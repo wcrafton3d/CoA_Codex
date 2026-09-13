@@ -119,9 +119,8 @@ The bot has included:
 -   `/wiki-category-delete`
 -   `/wiki-manage`
 
-The category commands above are implemented locally in Phase 3C and are
-not deployed at this checkpoint. Phase 3 is expanding category
-administration through Discord.
+The category commands above were deployed in Phase 3C. Phase 3 continues
+with management-panel integration and registry-controlled entry authoring.
 
 ## 7. SQLite architecture
 
@@ -593,8 +592,9 @@ but does not prevent a later free-form entry from reusing a deleted name.
 
 ### Phase 3C --- Category management commands/UI
 
-**Status: IMPLEMENTED LOCALLY; 26 tests passed on 2026-09-13. Not
-committed or deployed. Review is the next checkpoint.**
+**Status: COMPLETE and deployed on 2026-09-13. Review accepted; all 26
+tests passed locally and on OCI. Live Worldbuilder command tests are the
+next verification checkpoint.**
 
 Added Worldbuilder-only category management commands:
 
@@ -642,7 +642,29 @@ and diff checks passed. A no-network startup smoke test disabled
 `discord.Client.run`, used a temporary working directory/database, and
 confirmed registration of all 12 slash commands, including the three new
 category commands. Neither bot was started and no real database was
-changed.
+changed during local development.
+
+### Phase 3C deployment --- 2026-09-13
+
+-   Reviewed feature commit: `ca87e22c4066fd75a3c1b3f827bced524bfa4ad6`
+    (`Add Worldbuilder category management commands`), pushed to GitHub
+    `main` and deployed through the verified SSH Git-bundle procedure.
+-   Consistent SQLite backup, integrity verified:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3c-20260913-215144.db`.
+-   Syntax compilation and all 26 tests passed on OCI before service
+    restart. `coa-codex.service` is active and reconnected to the Discord
+    gateway. Discord runs `setup_hook()` before connecting, so the clean
+    connection confirms guild command synchronization completed without
+    raising an exception.
+-   Post-deployment database integrity passed; `wiki_bootstrap` remains
+    complete. Every application row matched the backup: 13 entries, 19
+    relationships, and five categories. Deployment did not mutate Codex
+    content or category data.
+-   No live add/edit/delete operation was performed during deployment.
+    Conduct the live Worldbuilder checks with disposable category data,
+    verify restart persistence, and remove the disposable empty category
+    through the guarded command before marking production UI verification
+    complete.
 
 `/wiki-manage` integration remains Phase 3D. Entry add/edit still allow
 free-form categories until Phase 3E. Live Discord testing should cover
@@ -835,14 +857,18 @@ As of 2026-09-13:
 -   See Section 14 for live versus offline verification scope and empty-category behavior.
 -   Phase 3A changes: **committed, pushed, and deployed; see Section 14**
 -   Phase 3B helpers: **committed, pushed, and deployed; 11 tests passed locally and on OCI**
+-   Startup seeding prerequisite: **committed, pushed, deployed, and
+    verified without application-row changes**
+-   Phase 3C commands/UI: **committed, pushed, and deployed; 26 tests
+    passed locally and on OCI; controlled live command tests pending**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3B deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3C deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the local Phase 3C commands, tests, and
-context update before commit or deployment. The startup-seeding
-prerequisite is committed, pushed, deployed, and verified.
+**Next development action:** perform controlled live Phase 3C command
+tests, then record the result. Phase 3D `/wiki-manage` integration follows
+after Phase 3C production UI verification.
 
 ## 26. Maintenance rule
 
