@@ -114,9 +114,14 @@ The bot has included:
 -   `/wiki-add`
 -   `/wiki-edit`
 -   `/wiki-delete`
+-   `/wiki-category-add`
+-   `/wiki-category-edit`
+-   `/wiki-category-delete`
 -   `/wiki-manage`
 
-Phase 3 is expanding category administration through Discord.
+The category commands above are implemented locally in Phase 3C and are
+not deployed at this checkpoint. Phase 3 is expanding category
+administration through Discord.
 
 ## 7. SQLite architecture
 
@@ -588,20 +593,62 @@ but does not prevent a later free-form entry from reusing a deleted name.
 
 ### Phase 3C --- Category management commands/UI
 
-Add Worldbuilder-facing category management, potentially:
+**Status: IMPLEMENTED LOCALLY; 26 tests passed on 2026-09-13. Not
+committed or deployed. Review is the next checkpoint.**
+
+Added Worldbuilder-only category management commands:
 
 -   `/wiki-category-add`
 -   `/wiki-category-edit`
 -   `/wiki-category-delete`
 
-Category fields:
+Add/edit use Discord modals with these fields:
 
 -   name
 -   description
 -   icon
 -   sort/display order
 
-Prevent case-insensitive duplicates.
+Edit and delete use registry-backed autocomplete, preserving
+`sort_order, name` ordering and Discord's 25-choice limit. Directly typed
+names remain valid command input and are resolved case-insensitively.
+
+The UI handles validation, case-insensitive duplicates, missing/stale
+categories, and database errors with ephemeral responses. Edit preloads
+all fields. Clearing description or icon stores `NULL`; renaming uses the
+Phase 3B transaction that reassigns matching entries without changing
+their other data.
+
+Deletion refuses immediately when the category contains entries and tells
+the Worldbuilder how many must be reassigned. Empty-category deletion uses
+an explicit danger-button confirmation bound to the initiating user. The
+atomic Phase 3B helper checks usage again when confirmation is clicked, so
+a category that gained an entry meanwhile is not deleted. Cancel, missing,
+concurrent-in-use, success, and database-error outcomes remove the expired
+confirmation controls.
+
+The sort-order modal parser accepts signed whole numbers within SQLite's
+64-bit integer range. Category names retain the 1–50 character helper
+rule. Modal descriptions are limited to 1,000 characters and icons to 100
+characters; the database helper still accepts any text for those fields.
+
+Tests in `tests/test_category_ui.py` exercise autocomplete, parsing,
+modal field/result handling, database-error responses, role gates,
+missing/in-use command paths, confirmation ownership, cancel/success, and
+the confirmation-time usage race. All 26 tests (the 19 existing database
+and startup tests plus seven Phase 3C UI tests) passed with pinned
+`discord.py` 2.7.1. Syntax, Python 3.10 grammar, command-name inspection,
+and diff checks passed. A no-network startup smoke test disabled
+`discord.Client.run`, used a temporary working directory/database, and
+confirmed registration of all 12 slash commands, including the three new
+category commands. Neither bot was started and no real database was
+changed.
+
+`/wiki-manage` integration remains Phase 3D. Entry add/edit still allow
+free-form categories until Phase 3E. Live Discord testing should cover
+add, duplicate refusal, edit/rename, guarded deletion, empty deletion and
+restart persistence using disposable category data; follow the production
+token rule and do not mutate production solely for local testing.
 
 ### Phase 3D --- `/wiki-manage` integration
 
@@ -793,7 +840,9 @@ As of 2026-09-13:
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** Phase 3C category management commands/UI. The startup-seeding prerequisite is committed, pushed, deployed, and verified.
+**Next development action:** review the local Phase 3C commands, tests, and
+context update before commit or deployment. The startup-seeding
+prerequisite is committed, pushed, deployed, and verified.
 
 ## 26. Maintenance rule
 

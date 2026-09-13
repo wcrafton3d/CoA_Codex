@@ -1148,6 +1148,30 @@ async def tag_autocomplete(
         for tag in tags
     ]
 
+
+async def category_autocomplete(
+    interaction: discord.Interaction,
+    current: str
+):
+    """Return registered category names matching the current text."""
+    current = current.strip().lower()
+    categories = get_categories()
+
+    if current:
+        categories = [
+            category
+            for category in categories
+            if current in category.lower()
+        ]
+
+    return [
+        app_commands.Choice(
+            name=category,
+            value=category
+        )
+        for category in categories[:25]
+    ]
+
 # --------------------------------------------------
 # Discord Bot
 # --------------------------------------------------
@@ -4692,6 +4716,336 @@ class WikiSearchResultView(discord.ui.View):
             )
 
             return
+
+# --------------------------------------------------
+# CATEGORY MANAGEMENT
+# --------------------------------------------------
+
+def parse_category_sort_order(value: str) -> int:
+    """Parse a modal sort-order value using the helper's integer rules."""
+    try:
+        sort_order = int(value.strip())
+    except ValueError as error:
+        raise ValueError("Sort order must be a whole number.") from error
+
+    if not -(2 ** 63) <= sort_order < 2 ** 63:
+        raise ValueError("Sort order is outside SQLite's supported range.")
+
+    return sort_order
+
+
+class CategoryAddModal(discord.ui.Modal):
+
+    def __init__(self):
+        super().__init__(title="Create Codex Category")
+
+        self.name_input = discord.ui.TextInput(
+            label="Name",
+            placeholder="e.g. Deities",
+            required=True,
+            max_length=50
+        )
+        self.description_input = discord.ui.TextInput(
+            label="Description (optional)",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1000
+        )
+        self.icon_input = discord.ui.TextInput(
+            label="Icon (optional)",
+            placeholder="e.g. ✨",
+            required=False,
+            max_length=100
+        )
+        self.sort_order_input = discord.ui.TextInput(
+            label="Sort order",
+            placeholder="e.g. 60",
+            default="0",
+            required=True,
+            max_length=20
+        )
+
+        self.add_item(self.name_input)
+        self.add_item(self.description_input)
+        self.add_item(self.icon_input)
+        self.add_item(self.sort_order_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            sort_order = parse_category_sort_order(
+                self.sort_order_input.value
+            )
+            result = create_category(
+                self.name_input.value,
+                self.description_input.value.strip() or None,
+                self.icon_input.value.strip() or None,
+                sort_order
+            )
+        except ValueError as error:
+            await interaction.response.send_message(
+                f"❌ {error}",
+                ephemeral=True
+            )
+            return
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ The category could not be created because of a "
+                "database error.",
+                ephemeral=True
+            )
+            return
+
+        name = self.name_input.value.strip()
+        if result == "duplicate":
+            await interaction.response.send_message(
+                f"❌ A category named **{name}** already exists.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"✅ Category **{name}** created.",
+            ephemeral=True
+        )
+
+
+class CategoryEditModal(discord.ui.Modal):
+
+    def __init__(self, category):
+        category_id, name, description, icon, sort_order = category
+        super().__init__(title="Edit Codex Category")
+        self.original_name = name
+
+        self.name_input = discord.ui.TextInput(
+            label="Name",
+            default=name,
+            required=True,
+            max_length=50
+        )
+        self.description_input = discord.ui.TextInput(
+            label="Description (optional)",
+            default=description or "",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1000
+        )
+        self.icon_input = discord.ui.TextInput(
+            label="Icon (optional)",
+            default=icon or "",
+            required=False,
+            max_length=100
+        )
+        self.sort_order_input = discord.ui.TextInput(
+            label="Sort order",
+            default=str(sort_order),
+            required=True,
+            max_length=20
+        )
+
+        self.add_item(self.name_input)
+        self.add_item(self.description_input)
+        self.add_item(self.icon_input)
+        self.add_item(self.sort_order_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            sort_order = parse_category_sort_order(
+                self.sort_order_input.value
+            )
+            result = update_category(
+                self.original_name,
+                self.name_input.value,
+                self.description_input.value.strip() or None,
+                self.icon_input.value.strip() or None,
+                sort_order
+            )
+        except ValueError as error:
+            await interaction.response.send_message(
+                f"❌ {error}",
+                ephemeral=True
+            )
+            return
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ The category could not be updated because of a "
+                "database error.",
+                ephemeral=True
+            )
+            return
+
+        name = self.name_input.value.strip()
+        if result == "not_found":
+            message = "❌ That category no longer exists."
+        elif result == "duplicate":
+            message = f"❌ A category named **{name}** already exists."
+        else:
+            message = f"✅ Category **{name}** updated."
+
+        await interaction.response.send_message(
+            message,
+            ephemeral=True
+        )
+
+
+class CategoryDeleteConfirmationView(discord.ui.View):
+
+    def __init__(self, author_id: int, category_name: str):
+        super().__init__(timeout=60)
+        self.author_id = author_id
+        self.category_name = category_name
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "⛔ Only the Worldbuilder who initiated this deletion "
+                "can confirm it.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    @discord.ui.button(
+        label="Delete Category",
+        emoji="🗑️",
+        style=discord.ButtonStyle.danger
+    )
+    async def confirm_delete(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        try:
+            result = delete_category(self.category_name)
+        except sqlite3.Error:
+            await interaction.response.edit_message(
+                content="❌ The category could not be deleted because "
+                "of a database error.",
+                embed=None,
+                view=None
+            )
+            return
+
+        if result == "not_found":
+            message = "❌ That category no longer exists."
+        elif result == "in_use":
+            message = (
+                "❌ This category now contains entries and cannot be "
+                "deleted. Reassign those entries first."
+            )
+        else:
+            message = f"🗑️ Category **{self.category_name}** deleted."
+
+        await interaction.response.edit_message(
+            content=message,
+            embed=None,
+            view=None
+        )
+        self.stop()
+
+    @discord.ui.button(
+        label="Cancel",
+        emoji="✖️",
+        style=discord.ButtonStyle.secondary
+    )
+    async def cancel_delete(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.edit_message(
+            content=f"Deletion of **{self.category_name}** cancelled.",
+            embed=None,
+            view=None
+        )
+        self.stop()
+
+
+@bot.tree.command(
+    name="wiki-category-add",
+    description="Create a registered CoA Codex category."
+)
+async def wiki_category_add(interaction: discord.Interaction):
+    if not await require_worldbuilder(interaction):
+        return
+    await interaction.response.send_modal(CategoryAddModal())
+
+
+@bot.tree.command(
+    name="wiki-category-edit",
+    description="Edit a registered CoA Codex category."
+)
+@app_commands.describe(category="The category you want to edit.")
+@app_commands.autocomplete(category=category_autocomplete)
+async def wiki_category_edit(
+    interaction: discord.Interaction,
+    category: str
+):
+    if not await require_worldbuilder(interaction):
+        return
+
+    details = get_category(category)
+    if details is None:
+        await interaction.response.send_message(
+            f"❌ The category **{category.strip()}** does not exist.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.send_modal(CategoryEditModal(details))
+
+
+@bot.tree.command(
+    name="wiki-category-delete",
+    description="Delete an empty registered CoA Codex category."
+)
+@app_commands.describe(category="The empty category you want to delete.")
+@app_commands.autocomplete(category=category_autocomplete)
+async def wiki_category_delete(
+    interaction: discord.Interaction,
+    category: str
+):
+    if not await require_worldbuilder(interaction):
+        return
+
+    details = get_category(category)
+    if details is None:
+        await interaction.response.send_message(
+            f"❌ The category **{category.strip()}** does not exist.",
+            ephemeral=True
+        )
+        return
+
+    name = details[1]
+    entry_count = get_category_entry_count(name)
+    if entry_count:
+        noun = "entry" if entry_count == 1 else "entries"
+        await interaction.response.send_message(
+            f"❌ **{name}** contains {entry_count} {noun} and cannot be "
+            "deleted. Reassign those entries first.",
+            ephemeral=True
+        )
+        return
+
+    embed = discord.Embed(
+        title="⚠️ Delete Codex Category?",
+        description=(
+            f"Delete the empty category **{name}**?\n\n"
+            "This action cannot be undone."
+        ),
+        color=discord.Color.red()
+    )
+    await interaction.response.send_message(
+        embed=embed,
+        view=CategoryDeleteConfirmationView(
+            author_id=interaction.user.id,
+            category_name=name
+        ),
+        ephemeral=True
+    )
+
 
 # --------------------------------------------------
 # Worldbuilder Management View
