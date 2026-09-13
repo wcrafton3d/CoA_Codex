@@ -469,15 +469,14 @@ has an entry, so this was not an empty-category live test.
     Fetching a bundle does not refresh OCI's `origin/main` tracking ref;
     compare the actual `HEAD` with the pushed commit when checking parity.
 
-Phase 3B is implemented locally (see Section 15). Keep unused `CATEGORY_ICONS`
+Phase 3B is deployed (see Section 15). Keep unused `CATEGORY_ICONS`
 cleanup separate from this deployed feature.
 
 ## 15. Proposed Phase 3 roadmap after 3A
 
 ### Phase 3B --- Category database helpers
 
-**Status: IMPLEMENTED LOCALLY; 11 database tests passed on 2026-09-13.
-Not committed or deployed. Review is the next checkpoint.**
+**Status: COMPLETE and deployed on 2026-09-13. Review accepted; all 11 database tests passed locally and on OCI.**
 
 New helpers in `bot.py`:
 
@@ -519,8 +518,8 @@ definitions from `bot.py`, avoiding its import-time Discord startup and
 It covers missing/empty categories, validation, duplicates, ordering/icons,
 renames and data preservation, rollback failures, guarded deletion, custom
 category deletion persistence, and competing-writer exclusion. All 11 tests
-passed; source syntax and diff whitespace checks also passed. Neither bot
-was started and no local or production database was changed during Phase 3B.
+passed; source syntax and diff whitespace checks also passed. During local development, neither bot was started and neither real database
+was changed. Deployment verification is recorded below.
 
 **Before Phase 3C exposes mutations:** existing startup code still runs
 `initialize_categories()` with `INSERT OR IGNORE` on every launch, so
@@ -530,6 +529,22 @@ that startup policy in a separate tested checkpoint before offering default
 category rename/delete in Discord. Phase 3E must also validate entry writes
 against the registry: the deletion lock prevents a write during the check,
 but does not prevent a later free-form entry from reusing a deleted name.
+
+### Phase 3B deployment --- 2026-09-13
+
+-   Reviewed feature commit: `f67660be4decd7b3e509129bb2b58d6ae2d58171`
+    (`Add category registry management helpers and database tests`), pushed
+    to GitHub `main` and deployed using a verified SSH Git bundle and
+    fast-forward merge, as established during Phase 3A.
+-   Consistent SQLite backup, integrity verified:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3b-20260913-203206.db`.
+-   Syntax compilation and all 11 temporary-database tests passed on OCI
+    before restarting `coa-codex.service`. The service is active and
+    reconnected to Discord; no local bot was running.
+-   Post-deployment SQLite integrity passed. Every application row matched
+    the backup: 13 entries, 19 relationships, and five categories.
+-   No Discord UI changes or production category mutations were made.
+    The startup-seeding limitation above remains the next development step.
 
 ### Phase 3C --- Category management commands/UI
 
@@ -732,17 +747,13 @@ As of 2026-09-13:
 -   Phase 3A: **complete; user accepted the live Bestiary button check**
 -   See Section 14 for live versus offline verification scope and empty-category behavior.
 -   Phase 3A changes: **committed, pushed, and deployed; see Section 14**
--   Phase 3B helpers: **implemented locally; 11 tests passed; uncommitted,
-    not deployed**
+-   Phase 3B helpers: **committed, pushed, and deployed; 11 tests passed locally and on OCI**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3A deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3B deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 3B code/tests and context
-changes before commit or deployment. Resolve default-category startup
-seeding before exposing rename/delete in Phase 3C. Phase 3A production
-visual verification is complete.
+**Next development action:** resolve default-category and fixed-entry startup seeding in a separate tested checkpoint before exposing rename/delete in Phase 3C. Phase 3B is deployed; Phase 3A production visual verification is complete.
 
 ## 26. Maintenance rule
 
