@@ -753,6 +753,27 @@ and pinned `discord.py` 2.7.1. A no-network import smoke test also registered
 all 12 slash commands with `discord.Client.run` disabled. Neither bot was
 started and no real database was changed during this checkpoint.
 
+### Phase 3E deployment --- 2026-09-14
+
+-   Reviewed feature commit `50d13798816f1b3b59d19d4db38e09bb9f796d86`
+    (`Require registered categories for wiki entries`) was pushed to GitHub
+    `main` and deployed through the verified SSH Git-bundle procedure.
+-   A consistent SQLite backup passed integrity verification:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3e-20260914-215359.db`.
+    It contained 19 entries, 25 relationships, six categories, and the
+    complete bootstrap marker.
+-   Source compilation and all 35 tests passed on OCI before restart.
+    `coa-codex.service` restarted successfully and connected to the Discord
+    gateway.
+-   Post-restart integrity and counts matched the backup. A registry join
+    confirmed that every live entry uses a registered category.
+-   Complete non-destructive Discord UI checks before marking Phase 3E
+    production verification complete: confirm `/wiki-add` opens the ordered
+    category picker before its modal; confirm `/wiki-edit` does the same and
+    marks the entry's current category; and verify the Create Entry/Edit Entry
+    paths from `/wiki-manage`. Do not submit an entry change solely for these
+    checks.
+
 ### Phase 3F --- Cleanup
 
 After registry behavior is authoritative and tested:
@@ -936,15 +957,15 @@ As of 2026-09-14:
     tested; all add/duplicate/edit/restart/delete safeguards passed**
 -   Phase 3D `/wiki-manage` integration: **complete; committed, pushed,
     deployed, and visually verified in Discord; 28 tests pass locally and on OCI**
--   Phase 3E registry-controlled entry categories: **implemented locally;
-    35 tests pass; awaiting review before commit or deployment**
+-   Phase 3E registry-controlled entry categories: **committed, pushed, and
+    deployed; 35 tests pass locally and on OCI; Discord UI checks pending**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3D deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3E deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 3E diff and test evidence, then
-commit, push, deploy, and conduct non-destructive Discord entry-flow checks.
+**Next development action:** complete the non-destructive Phase 3E Discord
+entry-flow checks, record the result, then begin Phase 3F cleanup.
 
 ## 26. Maintenance rule
 
