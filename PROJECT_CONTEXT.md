@@ -119,8 +119,9 @@ The bot has included:
 -   `/wiki-category-delete`
 -   `/wiki-manage`
 
-The category commands above were deployed in Phase 3C. Phase 3 continues
-with management-panel integration and registry-controlled entry authoring.
+The category commands above were deployed in Phase 3C. Phase 3 Category
+Registry Integration, including management-panel integration and
+registry-controlled entry authoring, is complete.
 
 ## 7. SQLite architecture
 
@@ -809,7 +810,98 @@ pass locally.
     Every production entry still uses a registered category.
 -   Phase 3 Category Registry Integration is complete.
 
-## 16. Navigation considerations
+## 16. Phase 4 --- Multi-page wiki entries
+
+**Status: PLANNED. No Phase 4 code or schema changes have been made.**
+
+### Objective
+
+Allow a long Codex entry to contain multiple ordered content pages while
+preserving the existing entry identity, title, category, tags, image,
+relationships, permissions, and navigation behavior.
+
+### Agreed Discord experience
+
+-   Creating an entry stores the submitted content as page 1.
+-   A Worldbuilder-facing **Add Page** button opens another content modal for
+    the same entry.
+-   Each page accepts at most 4,000 characters, matching Discord's modal text
+    input limit and remaining safely below the 4,096-character embed
+    description limit.
+-   Entry readers use Previous and Next buttons and a `Page X / Y` indicator.
+-   A one-page entry continues to look and behave like the current entry where
+    possible; unnecessary page controls should not clutter it.
+-   Editing targets one selected page. Page-management controls must remain
+    restricted to Worldbuilders.
+-   A later convenience control may save the current page and immediately open
+    the Add Page flow.
+
+Normal Discord modal submissions will not be automatically chunked. Discord
+will not submit more than 4,000 characters from one text input, and automatic
+splitting would create arbitrary page boundaries. File/text import and
+automatic paragraph-aware chunking remain separate future enhancements. Phase
+4 must still inspect existing production content lengths and preserve any
+legacy oversized value without loss during migration.
+
+### Phase 4A --- Page data foundation
+
+-   Reconcile every entry query and tuple consumer before changing schema.
+-   Design and review a `wiki_entry_pages` table (or an equivalent normalized
+    structure) with stable entry ownership, deterministic page order, and no
+    duplicate page positions.
+-   Define deletion and transaction behavior explicitly so entry deletion
+    cannot leave orphan pages and failed page writes roll back cleanly.
+-   Migrate every existing entry's content into page 1 without changing entry
+    IDs or metadata. Inspect the production maximum content length before
+    finalizing migration behavior.
+-   Add database helpers and temporary-database tests first. Do not alter the
+    Discord interface in this checkpoint.
+
+**Intended result:** storage and helper behavior support one or more pages while
+all existing entries remain readable and unchanged from a user's perspective.
+
+### Phase 4B --- Entry reading and page navigation
+
+-   Render one stored page at a time within Discord's embed limits.
+-   Add owner-safe Previous and Next controls with a page indicator.
+-   Preserve Back and Home behavior across entry, category, search, and tag
+    navigation paths.
+-   Handle missing, empty, first, last, and single-page states safely.
+
+**Intended result:** readers can cycle through all pages belonging to the same
+entry without producing extra persistent messages or losing their prior
+navigation context.
+
+### Phase 4C --- Worldbuilder page management
+
+-   Add the agreed **Add Page** action to the entry-management flow.
+-   Provide page selection before editing or deleting a page.
+-   Support deterministic reordering without duplicate or missing positions.
+-   Refuse deletion of the only remaining page and recheck state when a
+    confirmation is submitted.
+-   Cover stale controls, concurrent changes, role checks, validation errors,
+    and database failures.
+
+**Intended result:** Worldbuilders can add, edit, order, and remove entry pages
+entirely through Discord while ordinary users retain read-only navigation.
+
+### Phase 4D --- Verification, deployment, and cleanup
+
+-   Run migration, helper, UI, navigation, permission, rollback, restart, and
+    regression tests.
+-   Verify existing one-page entries and a controlled multi-page entry in the
+    Test Server without risking production lore.
+-   Preserve the standard stop-local/start-production token discipline.
+-   Back up production SQLite before deploying the migration, verify database
+    integrity and row preservation afterward, and record the checkpoint here.
+-   Remove obsolete single-page assumptions only after the multi-page paths
+    are deployed and verified.
+
+**Intended result:** multi-page entries are production-safe, fully managed in
+Discord, and documented without mixing unrelated category UI work into the
+phase.
+
+## 17. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
 entry, tags, and tag views. Preserve back/navigation behavior when
@@ -822,7 +914,7 @@ Historically it slices categories with `categories[:20]`. As category
 count grows, Discord component limits may require pagination or a select
 menu.
 
-## 17. Category browser considerations
+## 18. Category browser considerations
 
 `get_category_entries(category)` historically selects:
 
@@ -833,7 +925,7 @@ Do not add `image_url` or change tuple shape unless consumers need it.
 An empty registered category is valid and should be distinguished from a
 nonexistent category.
 
-## 18. Production deployment procedure
+## 19. Production deployment procedure
 
 Before deployment:
 
@@ -863,7 +955,7 @@ journalctl -u coa-codex.service -n 50 --no-pager
 Verify clean startup, migrations, DB integrity, Discord connection, and
 changed behavior.
 
-## 19. Git safety checklist
+## 20. Git safety checklist
 
 Before commits:
 
@@ -890,7 +982,7 @@ commits and deployment bundles.
 
 Keep feature commits focused.
 
-## 20. Standard testing sequence
+## 21. Standard testing sequence
 
 1.  Inspect current implementation.
 2.  Edit locally.
@@ -910,7 +1002,7 @@ Keep feature commits focused.
 Avoid combining migration, UI redesign, refactoring, and unrelated
 cleanup in one unreviewed change.
 
-## 21. Architectural direction
+## 22. Architectural direction
 
 For categories:
 
@@ -920,10 +1012,17 @@ For categories:
 
 This lets Worldbuilders expand the Codex without developer intervention.
 
+For entry content:
+
+**Current:** one `wiki_entries.content` value → one entry embed
+
+**Phase 4 target:** one wiki entry → ordered content pages → Discord page
+navigation and Worldbuilder page management
+
 Potential future categories discussed as examples include Deities,
 Items, Magic, and History. Do not seed them unless requested.
 
-## 22. Category design rules
+## 23. Category design rules
 
 -   `sort_order` is primary ordering; name is deterministic secondary
     ordering.
@@ -935,7 +1034,7 @@ Items, Magic, and History. Do not seed them unless requested.
 -   Deletion must not orphan entries.
 -   Revisit the one-button-per-category home UI as category count grows.
 
-## 23. Security
+## 24. Security
 
 Never place secrets in this document.
 
@@ -945,7 +1044,7 @@ token, and SSH private key. They are intentionally omitted.
 If a credential is ever committed, rotate it; merely deleting it from
 the latest source does not remove it from Git history.
 
-## 24. ChatGPT Project / Codex handoff
+## 25. ChatGPT Project / Codex handoff
 
 The long-running development conversation is intended to live in the
 **CoA Codex Development** ChatGPT Project. This file is the
@@ -963,7 +1062,7 @@ repository/database are the current technical truth; this document
 records intent and history. Report discrepancies before changing
 behavior.
 
-## 25. Immediate handoff summary
+## 26. Immediate handoff summary
 
 As of 2026-09-14:
 
@@ -987,15 +1086,18 @@ As of 2026-09-14:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
+-   Phase 4 multi-page wiki entries: **roadmap defined; implementation has not
+    started**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3F deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** define the next roadmap checkpoint after the
-completed Category Registry Integration phase.
+**Next development action:** begin Phase 4A with a read-only repository and
+production-data audit, then present the exact page schema and migration contract
+for review before implementation.
 
-## 26. Maintenance rule
+## 27. Maintenance rule
 
 Update this file whenever:
 
