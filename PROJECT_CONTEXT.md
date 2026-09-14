@@ -794,6 +794,21 @@ constant was removed. Python compilation, Python 3.10 grammar parsing, the
 offline startup/command-registration smoke test, and all 35 automated tests
 pass locally.
 
+### Phase 3F deployment --- 2026-09-14
+
+-   Reviewed feature commit `421ff705716b724be20b97b2f6d8addf7c432f6d`
+    (`Complete category registry cleanup`) was pushed to GitHub `main` and
+    deployed through the verified SSH Git-bundle procedure.
+-   A consistent SQLite backup passed integrity verification:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3f-20260914-221039.db`.
+-   Source compilation and all 35 tests passed on OCI before restart.
+    `coa-codex.service` restarted successfully and connected to the Discord
+    gateway.
+-   Post-restart integrity and counts matched the backup: 19 entries, 25
+    relationships, six categories, and bootstrap marker `(1, 'complete')`.
+    Every production entry still uses a registered category.
+-   Phase 3 Category Registry Integration is complete.
+
 ## 16. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
@@ -954,7 +969,7 @@ As of 2026-09-14:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
--   Phase 3: **in progress**
+-   Phase 3 Category Registry Integration: **complete and deployed**
 -   Phase 3A local code changes: **made**
 -   Phase 3A syntax check: **passed**
 -   Phase 3A local DB check: **passed**
@@ -970,15 +985,15 @@ As of 2026-09-14:
     deployed, and visually verified in Discord; 28 tests pass locally and on OCI**
 -   Phase 3E registry-controlled entry categories: **complete; committed,
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
--   Phase 3F cleanup: **implemented and regression-tested locally; all 35 tests
-    pass; awaiting review before commit or deployment**
+-   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
+    all 35 tests pass locally and on OCI**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3E deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3F deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 3F cleanup diff before commit and
-deployment.
+**Next development action:** define the next roadmap checkpoint after the
+completed Category Registry Integration phase.
 
 ## 26. Maintenance rule
 
