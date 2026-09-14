@@ -1,6 +1,6 @@
 # CoA Codex --- Project Context
 
-**Last updated:** 2026-09-13\
+**Last updated:** 2026-09-14\
 **Repository:** `https://github.com/wcrafton3d/CoA_Codex.git`\
 **Application:** Discord fantasy-world Codex/wiki bot\
 **Stack:** Python, discord.py, SQLite
@@ -704,6 +704,24 @@ category refusal, and empty-category confirmation. Source compilation,
 and pinned `discord.py` 2.7.1. The local bot was not started and no local or
 production database content was changed during Phase 3D development.
 
+### Phase 3D deployment --- 2026-09-14
+
+-   Reviewed feature commit `4e43a77bee694d3ba456c085360c26f1ce309346`
+    (`Integrate category tools into wiki management`) was pushed to GitHub
+    `main` and deployed through the verified SSH Git-bundle procedure.
+-   A consistent SQLite backup was created with the backup API and passed
+    integrity verification:
+    `/home/ubuntu/CoA_Codex/wiki-before-phase3d-20260914-033412.db`.
+-   Source compilation and all 28 tests passed on OCI before restart.
+    `coa-codex.service` restarted successfully and connected to the Discord
+    gateway.
+-   Post-restart integrity matched the backup: 18 entries, 25 relationships,
+    six categories, and bootstrap marker `(1, 'complete')`.
+-   A fresh Codex browser tab redirected to Discord login, so the final
+    non-mutating `/wiki-manage` visual check remains pending. Verify that the
+    three category buttons appear and that Edit Category opens the ordered
+    registry picker; do not submit a production edit solely for this check.
+
 ### Phase 3E --- Registry-controlled entry categories
 
 Replace free-form category assignment with registered-category
@@ -872,7 +890,7 @@ behavior.
 
 ## 25. Immediate handoff summary
 
-As of 2026-09-13:
+As of 2026-09-14:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
@@ -888,15 +906,15 @@ As of 2026-09-13:
     verified without application-row changes**
 -   Phase 3C commands/UI: **complete; committed, pushed, deployed, and live
     tested; all add/duplicate/edit/restart/delete safeguards passed**
--   Phase 3D `/wiki-manage` integration: **implemented locally; 28 tests pass;
-    awaiting review before commit or deployment**
+-   Phase 3D `/wiki-manage` integration: **committed, pushed, and deployed;
+    28 tests pass locally and on OCI; visual Discord check pending**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3C deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 3D deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 3D diff, then commit, push, and
-deploy it through the established backup/test/restart/verification workflow.
+**Next development action:** complete the non-mutating Phase 3D Discord UI
+check, record it, then begin Phase 3E registry-controlled entry categories.
 
 ## 26. Maintenance rule
 
