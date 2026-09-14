@@ -137,6 +137,11 @@ def add_entry(
     tags="",
     image_url=None
 ):
+    """Create an entry in a registered category.
+
+    Return ``success``, ``duplicate``, or ``invalid_category``. The category
+    is validated under the write lock and stored using its registry spelling.
+    """
     connection = sqlite3.connect(DATABASE)
     try:
         with connection:
@@ -479,6 +484,11 @@ def update_entry(
     tags="",
     image_url=None
 ):
+    """Update an entry using a registered category.
+
+    Return ``success``, ``not_found``, or ``invalid_category``. The category
+    is validated under the write lock and stored using its registry spelling.
+    """
     connection = sqlite3.connect(DATABASE)
     try:
         with connection:
@@ -832,7 +842,7 @@ def delete_category(category: str) -> str:
 
     Hold the write lock across the usage check and deletion. This prevents
     another writer from adding entries between those two operations.
-    Entry authoring still needs registry validation in Phase 3E.
+    Entry creation and editing use the same write-lock discipline.
     """
     connection = sqlite3.connect(DATABASE)
     try:
@@ -907,34 +917,6 @@ def get_category_entries(category: str):
 # --------------------------------------------------
 
 CATEGORY_PAGE_SIZE = 20
-
-# --------------------------------------------------
-# Category Icons
-# --------------------------------------------------
-
-CATEGORY_ICONS = {
-    "world": "🌎",
-    "location": "📍",
-    "npc": "👤",
-    "character": "👤",
-    "faction": "⚔️",
-    "organization": "🏛️",
-    "creature": "🐉",
-    "monster": "👹",
-    "item": "🗡️",
-    "weapon": "⚔️",
-    "armor": "🛡️",
-    "magic": "✨",
-    "spell": "🔮",
-    "religion": "⛪",
-    "deity": "🌟",
-    "event": "📜",
-    "history": "📖",
-    "quest": "🗺️",
-    "region": "🗺️",
-    "city": "🏙️",
-    "settlement": "🏘️",
-}
 
 def get_category_icon(category: str) -> str:
     """Return the registered icon for a Codex category."""

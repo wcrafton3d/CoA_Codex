@@ -394,7 +394,9 @@ def get_category_icon(category: str) -> str:
 ```
 
 The old `CATEGORY_ICONS` dictionary was deliberately left in place
-temporarily. Inspection found no references beyond its definition. Removal may be considered separately after Phase 3A; it is not part of this checkpoint.
+temporarily. Inspection found no references beyond its definition. It was
+removed later during Phase 3F cleanup, after registry-controlled display and
+entry authoring were deployed and verified.
 
 ### Known consumers
 
@@ -481,8 +483,8 @@ has an entry, so this was not an empty-category live test.
     Fetching a bundle does not refresh OCI's `origin/main` tracking ref;
     compare the actual `HEAD` with the pushed commit when checking parity.
 
-Phase 3B is deployed (see Section 15). Keep unused `CATEGORY_ICONS`
-cleanup separate from this deployed feature.
+Phase 3B is deployed (see Section 15). The unused `CATEGORY_ICONS` cleanup
+was kept separate and completed in Phase 3F.
 
 ## 15. Proposed Phase 3 roadmap after 3A
 
@@ -767,12 +769,10 @@ started and no real database was changed during this checkpoint.
     gateway.
 -   Post-restart integrity and counts matched the backup. A registry join
     confirmed that every live entry uses a registered category.
--   Complete non-destructive Discord UI checks before marking Phase 3E
-    production verification complete: confirm `/wiki-add` opens the ordered
-    category picker before its modal; confirm `/wiki-edit` does the same and
-    marks the entry's current category; and verify the Create Entry/Edit Entry
-    paths from `/wiki-manage`. Do not submit an entry change solely for these
-    checks.
+-   The user completed the non-destructive Discord UI checks. `/wiki-add` and
+    `/wiki-edit`, plus Create Entry and Edit Entry from `/wiki-manage`, all
+    presented the registered-category selection flow correctly. No production
+    entry change was submitted. Phase 3E production verification is complete.
 
 ### Phase 3F --- Cleanup
 
@@ -782,6 +782,17 @@ After registry behavior is authoritative and tested:
 -   update comments/docstrings
 -   regression test
 -   update this document
+
+Local cleanup is ready for review. The unused `CATEGORY_ICONS` dictionary was
+removed after a repository-wide reference audit confirmed that its definition
+was its only remaining occurrence. Category icons continue to come from
+`wiki_categories.icon` through `get_category_icon()`, including the existing
+book fallback. The entry-write and category-deletion docstrings now describe
+the deployed registry validation, explicit result values, canonical spelling,
+and shared write-lock behavior. No active category helper or pagination
+constant was removed. Python compilation, Python 3.10 grammar parsing, the
+offline startup/command-registration smoke test, and all 35 automated tests
+pass locally.
 
 ## 16. Navigation considerations
 
@@ -957,15 +968,17 @@ As of 2026-09-14:
     tested; all add/duplicate/edit/restart/delete safeguards passed**
 -   Phase 3D `/wiki-manage` integration: **complete; committed, pushed,
     deployed, and visually verified in Discord; 28 tests pass locally and on OCI**
--   Phase 3E registry-controlled entry categories: **committed, pushed, and
-    deployed; 35 tests pass locally and on OCI; Discord UI checks pending**
+-   Phase 3E registry-controlled entry categories: **complete; committed,
+    pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
+-   Phase 3F cleanup: **implemented and regression-tested locally; all 35 tests
+    pass; awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3E deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** complete the non-destructive Phase 3E Discord
-entry-flow checks, record the result, then begin Phase 3F cleanup.
+**Next development action:** review the Phase 3F cleanup diff before commit and
+deployment.
 
 ## 26. Maintenance rule
 
