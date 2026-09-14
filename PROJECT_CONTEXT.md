@@ -684,7 +684,7 @@ changed during local development.
     data invariants.
 
 Entry add/edit still allow free-form categories until Phase 3E. Phase 3D is
-implemented locally below and remains undeployed pending review.
+complete and deployed as recorded below.
 
 ### Phase 3D --- `/wiki-manage` integration
 
@@ -717,10 +717,10 @@ production database content was changed during Phase 3D development.
     gateway.
 -   Post-restart integrity matched the backup: 18 entries, 25 relationships,
     six categories, and bootstrap marker `(1, 'complete')`.
--   A fresh Codex browser tab redirected to Discord login, so the final
-    non-mutating `/wiki-manage` visual check remains pending. Verify that the
-    three category buttons appear and that Edit Category opens the ordered
-    registry picker; do not submit a production edit solely for this check.
+-   The user completed the non-mutating `/wiki-manage` visual check in the
+    Test Server. Create Category, Edit Category, and Delete Category were all
+    present, and Edit Category opened the registered-category dropdown. No
+    production category change was submitted. Phase 3D is complete.
 
 ### Phase 3E --- Registry-controlled entry categories
 
@@ -812,6 +812,11 @@ Never commit:
 -   `wiki.db`
 -   database backups
 -   accidental OS metadata
+
+The local `assets/` directory is also ignored. It contains artwork intended
+to populate entry `image_url` values after external image hosting is chosen;
+the files are not runtime dependencies and must remain outside application
+commits and deployment bundles.
 
 Keep feature commits focused.
 
@@ -906,15 +911,16 @@ As of 2026-09-14:
     verified without application-row changes**
 -   Phase 3C commands/UI: **complete; committed, pushed, deployed, and live
     tested; all add/duplicate/edit/restart/delete safeguards passed**
--   Phase 3D `/wiki-manage` integration: **committed, pushed, and deployed;
-    28 tests pass locally and on OCI; visual Discord check pending**
+-   Phase 3D `/wiki-manage` integration: **complete; committed, pushed,
+    deployed, and visually verified in Discord; 28 tests pass locally and on OCI**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3D deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** complete the non-mutating Phase 3D Discord UI
-check, record it, then begin Phase 3E registry-controlled entry categories.
+**Next development action:** begin Phase 3E by reconciling the entry add/edit
+flows and tests, then implement registered-category selection and validation
+in a small reviewable checkpoint.
 
 ## 26. Maintenance rule
 
