@@ -730,6 +730,29 @@ likely choose the category before opening the remaining entry editor.
 
 Preserve existing authoring behavior while migrating.
 
+Local implementation is ready for review. `/wiki-add`, `/wiki-edit`, and the
+Create Entry/Edit Entry paths in `/wiki-manage` now present the ordered
+registered-category picker before opening the existing entry modal. The edit
+picker marks the entry's current category as selected. Picker pages contain
+at most 25 categories and include Previous/Next controls when needed, so all
+registered categories remain assignable as the registry grows.
+
+The entry modals no longer accept free-form category text. `add_entry()` and
+`update_entry()` independently validate the selected category inside an
+immediate write transaction, store the registry's canonical category name,
+and return explicit duplicate/not-found/invalid-category results. This closes
+the stale-selection and non-UI write paths without adding a schema migration
+or changing existing entry rows.
+
+New tests cover write-time validation and canonicalization, unchanged data on
+invalid writes, modal field preservation, every slash/management entry path,
+picker ownership and ordering, stale selections, an empty registry, and
+multi-page category selection. Source compilation, Python 3.10 grammar,
+`git diff --check`, and all 35 tests pass locally with bundled Python 3.12.14
+and pinned `discord.py` 2.7.1. A no-network import smoke test also registered
+all 12 slash commands with `discord.Client.run` disabled. Neither bot was
+started and no real database was changed during this checkpoint.
+
 ### Phase 3F --- Cleanup
 
 After registry behavior is authoritative and tested:
@@ -913,14 +936,15 @@ As of 2026-09-14:
     tested; all add/duplicate/edit/restart/delete safeguards passed**
 -   Phase 3D `/wiki-manage` integration: **complete; committed, pushed,
     deployed, and visually verified in Discord; 28 tests pass locally and on OCI**
+-   Phase 3E registry-controlled entry categories: **implemented locally;
+    35 tests pass; awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3D deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** begin Phase 3E by reconciling the entry add/edit
-flows and tests, then implement registered-category selection and validation
-in a small reviewable checkpoint.
+**Next development action:** review the Phase 3E diff and test evidence, then
+commit, push, deploy, and conduct non-destructive Discord entry-flow checks.
 
 ## 26. Maintenance rule
 

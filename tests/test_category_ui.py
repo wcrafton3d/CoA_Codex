@@ -61,6 +61,7 @@ class CategoryUiTests(unittest.IsolatedAsyncioTestCase):
             "get_category": Mock(),
             "get_category_entry_count": Mock(),
             "require_worldbuilder": AsyncMock(return_value=True),
+            "send_entry_category_picker": AsyncMock(),
         }
         exec(compile(MODULE, str(SOURCE), "exec"), self.ns)
 
@@ -222,6 +223,13 @@ class CategoryUiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Create Category", children)
         self.assertIn("Edit Category", children)
         self.assertIn("Delete Category", children)
+
+        i = interaction()
+        await children["Create Entry"].callback(i)
+        self.ns["send_entry_category_picker"].assert_awaited_once_with(
+            i,
+            mode="add"
+        )
 
         i = interaction()
         await children["Create Category"].callback(i)

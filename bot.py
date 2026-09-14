@@ -138,23 +138,31 @@ def add_entry(
     image_url=None
 ):
     connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT name FROM wiki_categories
+                WHERE name = ? COLLATE NOCASE
+            """, (category.strip(),)).fetchone()
+            if row is None:
+                return "invalid_category"
 
-    cursor.execute("""
-        INSERT OR IGNORE INTO wiki_entries
-        (id, title, category, content, tags, image_url)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        entry_id,
-        title,
-        category,
-        content,
-        tags,
-        image_url
-    ))
-
-    connection.commit()
-    connection.close()
+            cursor = connection.execute("""
+                INSERT OR IGNORE INTO wiki_entries
+                (id, title, category, content, tags, image_url)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                entry_id,
+                title,
+                row[0],
+                content,
+                tags,
+                image_url
+            ))
+            return "success" if cursor.rowcount else "duplicate"
+    finally:
+        connection.close()
 
 
 def get_entry(entry_id):
@@ -472,30 +480,36 @@ def update_entry(
     image_url=None
 ):
     connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
+    try:
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT name FROM wiki_categories
+                WHERE name = ? COLLATE NOCASE
+            """, (category.strip(),)).fetchone()
+            if row is None:
+                return "invalid_category"
 
-    cursor.execute("""
-        UPDATE wiki_entries
-        SET
-            title = ?,
-            category = ?,
-            content = ?,
-            tags = ?,
-            image_url = ?
-        WHERE id = ?
-    """, (
-        title,
-        category,
-        content,
-        tags,
-        image_url,
-        entry_id
-    ))
-
-    connection.commit()
-    connection.close()
-
-    return cursor.rowcount > 0
+            cursor = connection.execute("""
+                UPDATE wiki_entries
+                SET
+                    title = ?,
+                    category = ?,
+                    content = ?,
+                    tags = ?,
+                    image_url = ?
+                WHERE id = ?
+            """, (
+                title,
+                row[0],
+                content,
+                tags,
+                image_url,
+                entry_id
+            ))
+            return "success" if cursor.rowcount else "not_found"
+    finally:
+        connection.close()
 
 
 def delete_entry(entry_id):
@@ -3505,11 +3519,13 @@ async def wiki_tag(
 
 class WikiAddModal(discord.ui.Modal):
 
-    def __init__(self):
+    def __init__(self, category: str):
 
         super().__init__(
             title="Create Wiki Entry"
         )
+
+        self.category_value = category
 
         self.entry_id = discord.ui.TextInput(
             label="ID",
@@ -3523,13 +3539,6 @@ class WikiAddModal(discord.ui.Modal):
             placeholder="e.g. Blackwood Coven",
             required=True,
             max_length=100
-        )
-
-        self.category = discord.ui.TextInput(
-            label="Category",
-            placeholder="e.g. Location, NPC, Faction",
-            required=True,
-            max_length=50
         )
 
         self.tags = discord.ui.TextInput(
@@ -3549,7 +3558,6 @@ class WikiAddModal(discord.ui.Modal):
 
         self.add_item(self.entry_id)
         self.add_item(self.title_input)
-        self.add_item(self.category)
         self.add_item(self.tags)
         self.add_item(self.content)
 
@@ -3560,35 +3568,37 @@ class WikiAddModal(discord.ui.Modal):
 
         entry_id = self.entry_id.value.strip().lower()
         title = self.title_input.value.strip()
-        category = self.category.value.strip()
         tags = self.tags.value.strip()
 
         content = self.content.value.strip()
-        
-        existing = get_entry(entry_id)
 
-        if existing is not None:
-
-            await interaction.response.send_message(
-                f"❌ An entry with the ID "
-                f"`{entry_id}` already exists.",
-                ephemeral=True
-            )
-
-            return
-
-        add_entry(
+        result = add_entry(
             entry_id,
             title,
-            category,
+            self.category_value,
             content,
             tags
-        )  
+        )
+
+        if result == "invalid_category":
+            await interaction.response.send_message(
+                "❌ The selected category no longer exists. Reopen the "
+                "entry creator and choose another category.",
+                ephemeral=True
+            )
+            return
+
+        if result == "duplicate":
+            await interaction.response.send_message(
+                f"❌ An entry with the ID `{entry_id}` already exists.",
+                ephemeral=True
+            )
+            return
 
         await interaction.response.send_message(
             f"✅ Wiki entry **{title}** created.\n\n"
             f"ID: `{entry_id}`\n"
-            f"Category: **{category}**",
+            f"Category: **{self.category_value}**",
             ephemeral=True
         )
 
@@ -3609,8 +3619,9 @@ async def wiki_add(
     if not await require_worldbuilder(interaction):
         return
 
-    await interaction.response.send_modal(
-        WikiAddModal()
+    await send_entry_category_picker(
+        interaction,
+        mode="add"
     )
 
 
@@ -3620,7 +3631,7 @@ async def wiki_add(
 
 class WikiEditModal(discord.ui.Modal):
 
-    def __init__(self, entry):
+    def __init__(self, entry, selected_category: str):
 
         super().__init__(
             title="Edit Wiki Entry"
@@ -3629,19 +3640,13 @@ class WikiEditModal(discord.ui.Modal):
         entry_id, title, category, content, tags, image_url = entry
 
         self.entry_id_value = entry_id
+        self.category_value = selected_category
 
         self.title_input = discord.ui.TextInput(
             label="Title",
             default=title,
             required=True,
             max_length=100
-        )
-
-        self.category = discord.ui.TextInput(
-            label="Category",
-            default=category,
-            required=True,
-            max_length=50
         )
 
         self.tags = discord.ui.TextInput(
@@ -3668,7 +3673,6 @@ class WikiEditModal(discord.ui.Modal):
         )
 
         self.add_item(self.title_input)
-        self.add_item(self.category)
         self.add_item(self.tags)
         self.add_item(self.image_url)
         self.add_item(self.content)
@@ -3679,7 +3683,6 @@ class WikiEditModal(discord.ui.Modal):
     ):
 
         title = self.title_input.value.strip()
-        category = self.category.value.strip()
         tags = self.tags.value.strip()
         image_url = self.image_url.value.strip()
         content = self.content.value.strip()
@@ -3691,16 +3694,24 @@ class WikiEditModal(discord.ui.Modal):
             )
             return
 
-        success = update_entry(
+        result = update_entry(
             self.entry_id_value,
             title,
-            category,
+            self.category_value,
             content,
             tags,
             image_url
         )
 
-        if not success:
+        if result == "invalid_category":
+            await interaction.response.send_message(
+                "❌ The selected category no longer exists. Reopen the "
+                "entry editor and choose another category.",
+                ephemeral=True
+            )
+            return
+
+        if result == "not_found":
 
             await interaction.response.send_message(
                 "❌ The wiki entry could not be updated.",
@@ -3713,6 +3724,190 @@ class WikiEditModal(discord.ui.Modal):
             f"✅ Wiki entry **{title}** updated.",
             ephemeral=True
         )
+
+
+# --------------------------------------------------
+# Entry Category Selection
+# --------------------------------------------------
+
+class EntryCategorySelectView(discord.ui.View):
+
+    PAGE_SIZE = 25
+
+    def __init__(
+        self,
+        author_id: int,
+        mode: str,
+        categories,
+        entry=None
+    ):
+        super().__init__(timeout=300)
+        self.author_id = author_id
+        self.mode = mode
+        self.entry_id = entry[0] if entry is not None else None
+        self.current_category = entry[2] if entry is not None else None
+        self.categories = list(categories)
+        self.page = 0
+        self.page_count = (
+            len(self.categories) + self.PAGE_SIZE - 1
+        ) // self.PAGE_SIZE
+        self.build_items()
+
+    def build_items(self):
+        self.clear_items()
+        start = self.page * self.PAGE_SIZE
+        page_categories = self.categories[start:start + self.PAGE_SIZE]
+
+        options = [
+            discord.SelectOption(
+                label=category[:100],
+                value=category,
+                default=(
+                    self.current_category is not None
+                    and category.lower() == self.current_category.lower()
+                )
+            )
+            for category in page_categories
+        ]
+
+        select = discord.ui.Select(
+            placeholder="Select a registered category...",
+            options=options,
+            min_values=1,
+            max_values=1
+        )
+        select.callback = self.select_category
+        self.add_item(select)
+
+        if self.page_count > 1:
+            previous_button = discord.ui.Button(
+                label="Previous Categories",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary,
+                row=1,
+                disabled=self.page == 0
+            )
+            previous_button.callback = self.previous_page
+            self.add_item(previous_button)
+
+            next_button = discord.ui.Button(
+                label="Next Categories",
+                emoji="▶️",
+                style=discord.ButtonStyle.secondary,
+                row=1,
+                disabled=self.page >= self.page_count - 1
+            )
+            next_button.callback = self.next_page
+            self.add_item(next_button)
+
+    def prompt(self):
+        action = (
+            "create an entry in"
+            if self.mode == "add"
+            else "assign to the entry"
+        )
+        message = f"Select the registered category to {action}."
+        if self.page_count > 1:
+            message += f" Page {self.page + 1} of {self.page_count}."
+        return message
+
+    async def previous_page(self, interaction: discord.Interaction):
+        self.page -= 1
+        self.build_items()
+        await interaction.response.edit_message(
+            content=self.prompt(),
+            view=self
+        )
+
+    async def next_page(self, interaction: discord.Interaction):
+        self.page += 1
+        self.build_items()
+        await interaction.response.edit_message(
+            content=self.prompt(),
+            view=self
+        )
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "⛔ This category selection belongs to another "
+                "Worldbuilder.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def select_category(
+        self,
+        interaction: discord.Interaction
+    ):
+        selected = interaction.data["values"][0]
+        details = get_category(selected)
+        if details is None:
+            await interaction.response.send_message(
+                "❌ That category no longer exists. Reopen the entry "
+                "editor and choose another category.",
+                ephemeral=True
+            )
+            return
+
+        category = details[1]
+        if self.mode == "add":
+            await interaction.response.send_modal(
+                WikiAddModal(category)
+            )
+            return
+
+        entry = get_entry(self.entry_id)
+        if entry is None:
+            await interaction.response.send_message(
+                "❌ That wiki entry could not be found.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_modal(
+            WikiEditModal(entry, category)
+        )
+
+
+async def send_entry_category_picker(
+    interaction: discord.Interaction,
+    mode: str,
+    entry=None
+):
+    try:
+        categories = get_categories()
+    except sqlite3.Error:
+        await interaction.response.send_message(
+            "❌ Categories could not be loaded because of a database "
+            "error.",
+            ephemeral=True
+        )
+        return
+
+    if not categories:
+        await interaction.response.send_message(
+            "❌ No registered categories are available. Create a category "
+            "before authoring entries.",
+            ephemeral=True
+        )
+        return
+
+    view = EntryCategorySelectView(
+        author_id=interaction.user.id,
+        mode=mode,
+        categories=categories,
+        entry=entry
+    )
+    await interaction.response.send_message(
+        view.prompt(),
+        view=view,
+        ephemeral=True
+    )
 
 
 # --------------------------------------------------
@@ -3749,8 +3944,10 @@ async def wiki_edit(
 
         return
 
-    await interaction.response.send_modal(
-        WikiEditModal(entry)
+    await send_entry_category_picker(
+        interaction,
+        mode="edit",
+        entry=entry
     )
 
 
@@ -4657,8 +4854,10 @@ class WikiSearchResultView(discord.ui.View):
 
         if self.mode == "edit":
 
-            await interaction.response.send_modal(
-                WikiEditModal(entry)
+            await send_entry_category_picker(
+                interaction,
+                mode="edit",
+                entry=entry
             )
 
             return
@@ -5302,8 +5501,9 @@ class WikiManagementView(discord.ui.View):
             interaction: discord.Interaction
         ):
 
-            await interaction.response.send_modal(
-                WikiAddModal()
+            await send_entry_category_picker(
+                interaction,
+                mode="add"
             )
 
         return callback

@@ -17,7 +17,7 @@ FUNCTIONS = {
     "get_category", "category_exists", "get_category_entry_count",
     "_validate_category_fields", "create_category", "update_category",
     "delete_category", "get_categories", "get_category_icon",
-    "get_category_entries",
+    "get_category_entries", "add_entry", "update_entry",
 }
 SOURCE = Path(__file__).resolve().parents[1] / "bot.py"
 TREE = ast.parse(SOURCE.read_text(encoding="utf-8"))
@@ -74,6 +74,39 @@ class CategoryRegistryTests(unittest.TestCase):
         self.assertEqual(self.call("get_category_icon", "Zeta"), "📚")
         self.assertEqual(self.call("get_category_icon", "unknown"), "📚")
         self.assertEqual(self.call("get_category", "Zeta")[2:], (None, None, 15))
+
+    def test_entry_writes_require_and_canonicalize_registered_categories(self):
+        self.assertEqual(self.call(
+            "add_entry", "one", "One", " world ", "Lore", "tag"
+        ), "success")
+        self.assertEqual(
+            self.sql("SELECT category FROM wiki_entries WHERE id = 'one'"),
+            [("World",)]
+        )
+        self.assertEqual(self.call(
+            "add_entry", "missing", "Missing", "Unknown", "Lore"
+        ), "invalid_category")
+        self.assertEqual(self.call(
+            "add_entry", "one", "Duplicate", "World", "Other"
+        ), "duplicate")
+
+        self.assertEqual(self.call(
+            "update_entry", "one", "Changed", "Unknown", "Changed", "new"
+        ), "invalid_category")
+        self.assertEqual(
+            self.sql("SELECT title, category FROM wiki_entries WHERE id = 'one'"),
+            [("One", "World")]
+        )
+        self.assertEqual(self.call(
+            "update_entry", "one", "Changed", " npc ", "Changed", "new"
+        ), "success")
+        self.assertEqual(
+            self.sql("SELECT title, category FROM wiki_entries WHERE id = 'one'"),
+            [("Changed", "NPC")]
+        )
+        self.assertEqual(self.call(
+            "update_entry", "missing", "Missing", "World", "Lore"
+        ), "not_found")
 
     def test_invalid_fields_do_not_write(self):
         original = self.sql("SELECT * FROM wiki_categories")
