@@ -661,21 +661,48 @@ changed during local development.
     relationships, and five categories. Deployment did not mutate Codex
     content or category data.
 -   No live add/edit/delete operation was performed during deployment.
-    Conduct the live Worldbuilder checks with disposable category data,
-    verify restart persistence, and remove the disposable empty category
-    through the guarded command before marking production UI verification
-    complete.
+    Those controlled checks were completed afterward as recorded below.
 
-`/wiki-manage` integration remains Phase 3D. Entry add/edit still allow
-free-form categories until Phase 3E. Live Discord testing should cover
-add, duplicate refusal, edit/rename, guarded deletion, empty deletion and
-restart persistence using disposable category data; follow the production
-token rule and do not mutate production solely for local testing.
+### Phase 3C live verification --- 2026-09-13
+
+-   In Test Server `#general`, `/wiki-category-add` created the disposable
+    empty category `Phase3C Check 20260913`; a case-insensitive duplicate
+    was refused.
+-   `/wiki-category-edit` renamed it to `Phase3C Verified 20260913` and
+    persisted its edited description, icon, and sort order. After restarting
+    `coa-codex.service`, a direct registry query confirmed every edited value
+    and the zero-entry state survived.
+-   `/wiki-category-delete Races` was refused because the category contained
+    two entries. The command did not offer a confirmation prompt.
+-   Deleting the disposable empty category required the warning confirmation
+    and succeeded. A final production query confirmed the disposable row was
+    absent, `Races` still contained two entries, all 18 live entries remained,
+    and the service was active at commit `19617c0cfd388ed609f26c1911b0b2040342fec7`.
+-   Phase 3C production UI verification is complete. The live database now
+    has six registered categories, including the user-created `Races`, and
+    18 entries; these counts are operational observations rather than seeded
+    data invariants.
+
+Entry add/edit still allow free-form categories until Phase 3E. Phase 3D is
+implemented locally below and remains undeployed pending review.
 
 ### Phase 3D --- `/wiki-manage` integration
 
 Expose category administration through the existing management interface
 so Worldbuilders do not need Python or SQLite access.
+
+Local implementation is ready for review. `/wiki-manage` now includes
+Create Category, Edit Category, and Delete Category buttons. Create opens the
+existing category modal. Edit and delete load registered categories in
+registry order and present a category picker; the selected action reuses the
+existing edit modal and guarded deletion confirmation behavior. The picker
+and management panel remain bound to the Worldbuilder who opened them.
+
+The two new UI tests cover panel exposure, modal/picker routing, populated
+category refusal, and empty-category confirmation. Source compilation,
+`git diff --check`, and all 28 tests pass locally with bundled Python 3.12.14
+and pinned `discord.py` 2.7.1. The local bot was not started and no local or
+production database content was changed during Phase 3D development.
 
 ### Phase 3E --- Registry-controlled entry categories
 
@@ -859,16 +886,17 @@ As of 2026-09-13:
 -   Phase 3B helpers: **committed, pushed, and deployed; 11 tests passed locally and on OCI**
 -   Startup seeding prerequisite: **committed, pushed, deployed, and
     verified without application-row changes**
--   Phase 3C commands/UI: **committed, pushed, and deployed; 26 tests
-    passed locally and on OCI; controlled live command tests pending**
+-   Phase 3C commands/UI: **complete; committed, pushed, deployed, and live
+    tested; all add/duplicate/edit/restart/delete safeguards passed**
+-   Phase 3D `/wiki-manage` integration: **implemented locally; 28 tests pass;
+    awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3C deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** perform controlled live Phase 3C command
-tests, then record the result. Phase 3D `/wiki-manage` integration follows
-after Phase 3C production UI verification.
+**Next development action:** review the Phase 3D diff, then commit, push, and
+deploy it through the established backup/test/restart/verification workflow.
 
 ## 26. Maintenance rule
 

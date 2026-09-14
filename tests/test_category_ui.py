@@ -17,6 +17,8 @@ NAMES = {
     "CategoryAddModal",
     "CategoryEditModal",
     "CategoryDeleteConfirmationView",
+    "CategoryManagementSelectView",
+    "WikiManagementView",
     "wiki_category_add",
     "wiki_category_edit",
     "wiki_category_delete",
@@ -32,9 +34,10 @@ assert {node.name for node in nodes} == NAMES
 MODULE = ast.Module(body=nodes, type_ignores=[])
 
 
-def interaction(user_id=7):
+def interaction(user_id=7, values=None):
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
+        data={"values": values or []},
         response=SimpleNamespace(
             send_message=AsyncMock(),
             edit_message=AsyncMock(),
@@ -212,6 +215,66 @@ class CategoryUiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(call.kwargs["view"],
                               self.ns["CategoryDeleteConfirmationView"])
         self.assertTrue(call.kwargs["ephemeral"])
+
+    async def test_management_panel_exposes_category_actions(self):
+        view = self.ns["WikiManagementView"](7)
+        children = {child.label: child for child in view.children}
+        self.assertIn("Create Category", children)
+        self.assertIn("Edit Category", children)
+        self.assertIn("Delete Category", children)
+
+        i = interaction()
+        await children["Create Category"].callback(i)
+        self.assertIsInstance(
+            i.response.send_modal.call_args.args[0],
+            self.ns["CategoryAddModal"]
+        )
+
+        i = interaction()
+        await children["Edit Category"].callback(i)
+        picker = i.response.send_message.call_args.kwargs["view"]
+        self.assertIsInstance(
+            picker,
+            self.ns["CategoryManagementSelectView"]
+        )
+        self.assertTrue(i.response.send_message.call_args.kwargs["ephemeral"])
+
+        details = (5, "Bestiary", "Creatures", "🐉", 50)
+        self.ns["get_category"].return_value = details
+        i = interaction(values=["Bestiary"])
+        await picker.children[0].callback(i)
+        self.assertIsInstance(
+            i.response.send_modal.call_args.args[0],
+            self.ns["CategoryEditModal"]
+        )
+
+    async def test_management_delete_uses_registry_guards(self):
+        view = self.ns["WikiManagementView"](7)
+        delete_button = next(
+            child for child in view.children
+            if child.label == "Delete Category"
+        )
+        i = interaction()
+        await delete_button.callback(i)
+        picker = i.response.send_message.call_args.kwargs["view"]
+
+        self.ns["get_category"].return_value = (
+            1, "World", "Lore", "🌎", 10
+        )
+        self.ns["get_category_entry_count"].return_value = 2
+        i = interaction(values=["World"])
+        await picker.children[0].callback(i)
+        self.assertIn("2 entries", i.response.send_message.call_args.args[0])
+        self.assertNotIn("view", i.response.send_message.call_args.kwargs)
+
+        self.ns["get_category_entry_count"].return_value = 0
+        i = interaction(values=["World"])
+        await picker.children[0].callback(i)
+        confirmation = i.response.send_message.call_args.kwargs["view"]
+        self.assertIsInstance(
+            confirmation,
+            self.ns["CategoryDeleteConfirmationView"]
+        )
 
 
 if __name__ == "__main__":

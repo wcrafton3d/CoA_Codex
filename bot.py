@@ -5048,6 +5048,93 @@ async def wiki_category_delete(
 
 
 # --------------------------------------------------
+# Category Management Selection
+# --------------------------------------------------
+
+class CategoryManagementSelectView(discord.ui.View):
+
+    def __init__(self, author_id: int, mode: str, categories):
+        super().__init__(timeout=300)
+        self.author_id = author_id
+        self.mode = mode
+
+        options = [
+            discord.SelectOption(label=category[:100], value=category)
+            for category in categories[:25]
+        ]
+
+        select = discord.ui.Select(
+            placeholder=f"Select a category to {mode}...",
+            options=options,
+            min_values=1,
+            max_values=1
+        )
+        select.callback = self.select_category
+        self.add_item(select)
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "⛔ This category selection belongs to another "
+                "Worldbuilder.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def select_category(
+        self,
+        interaction: discord.Interaction
+    ):
+        category = interaction.data["values"][0]
+        details = get_category(category)
+
+        if details is None:
+            await interaction.response.send_message(
+                "❌ That category no longer exists.",
+                ephemeral=True
+            )
+            return
+
+        if self.mode == "edit":
+            await interaction.response.send_modal(
+                CategoryEditModal(details)
+            )
+            return
+
+        name = details[1]
+        entry_count = get_category_entry_count(name)
+        if entry_count:
+            noun = "entry" if entry_count == 1 else "entries"
+            await interaction.response.send_message(
+                f"❌ **{name}** contains {entry_count} {noun} and "
+                "cannot be deleted. Reassign those entries first.",
+                ephemeral=True
+            )
+            return
+
+        embed = discord.Embed(
+            title="⚠️ Delete Codex Category?",
+            description=(
+                f"Delete the empty category **{name}**?\n\n"
+                "This action cannot be undone."
+            ),
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(
+            embed=embed,
+            view=CategoryDeleteConfirmationView(
+                author_id=interaction.user.id,
+                category_name=name
+            ),
+            ephemeral=True
+        )
+
+
+# --------------------------------------------------
 # Worldbuilder Management View
 # --------------------------------------------------
 
@@ -5133,6 +5220,41 @@ class WikiManagementView(discord.ui.View):
         self.add_item(delete_button)
 
         # --------------------------------------------------
+        # Category Management
+        # --------------------------------------------------
+
+        add_category_button = discord.ui.Button(
+            label="Create Category",
+            emoji="➕",
+            style=discord.ButtonStyle.success,
+            row=1
+        )
+        add_category_button.callback = self.create_category_callback()
+        self.add_item(add_category_button)
+
+        edit_category_button = discord.ui.Button(
+            label="Edit Category",
+            emoji="✏️",
+            style=discord.ButtonStyle.primary,
+            row=1
+        )
+        edit_category_button.callback = (
+            self.create_category_selection_callback("edit")
+        )
+        self.add_item(edit_category_button)
+
+        delete_category_button = discord.ui.Button(
+            label="Delete Category",
+            emoji="🗑️",
+            style=discord.ButtonStyle.danger,
+            row=1
+        )
+        delete_category_button.callback = (
+            self.create_category_selection_callback("delete")
+        )
+        self.add_item(delete_category_button)
+
+        # --------------------------------------------------
         # Home
         # --------------------------------------------------
 
@@ -5140,7 +5262,7 @@ class WikiManagementView(discord.ui.View):
             label="Codex Home",
             emoji="🏠",
             style=discord.ButtonStyle.secondary,
-            row=1
+            row=2
         )
 
         home_button.callback = (
@@ -5244,6 +5366,55 @@ class WikiManagementView(discord.ui.View):
         return callback
 
     # --------------------------------------------------
+    # Category Management
+    # --------------------------------------------------
+
+    def create_category_callback(self):
+
+        async def callback(
+            interaction: discord.Interaction
+        ):
+            await interaction.response.send_modal(
+                CategoryAddModal()
+            )
+
+        return callback
+
+    def create_category_selection_callback(self, mode: str):
+
+        async def callback(
+            interaction: discord.Interaction
+        ):
+            try:
+                categories = get_categories()
+            except sqlite3.Error:
+                await interaction.response.send_message(
+                    "❌ Categories could not be loaded because of a "
+                    "database error.",
+                    ephemeral=True
+                )
+                return
+
+            if not categories:
+                await interaction.response.send_message(
+                    "❌ No registered categories are available.",
+                    ephemeral=True
+                )
+                return
+
+            await interaction.response.send_message(
+                f"Select a category to {mode}.",
+                view=CategoryManagementSelectView(
+                    author_id=interaction.user.id,
+                    mode=mode,
+                    categories=categories
+                ),
+                ephemeral=True
+            )
+
+        return callback
+
+    # --------------------------------------------------
     # Home
     # --------------------------------------------------
 
@@ -5277,8 +5448,8 @@ async def wiki_manage(
         title="🛠️ Codex Management",
         description=(
             "Manage the CoA Codex from this panel.\n\n"
-            "Create, edit, connect, or delete "
-            "codex entries."
+            "Create, edit, connect, or delete codex entries and "
+            "categories."
         ),
         color=discord.Color.gold()
     )
@@ -5316,6 +5487,14 @@ async def wiki_manage(
             "from the Codex."
         ),
         inline=True
+    )
+
+    embed.add_field(
+        name="📚 Manage Categories",
+        value=(
+            "Create, edit, or delete registered Codex categories."
+        ),
+        inline=False
     )
 
     embed.set_footer(
