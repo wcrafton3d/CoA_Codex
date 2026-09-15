@@ -831,8 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phases 4A and 4B are complete and deployed. Phase 4C is
-implemented and tested locally, awaiting review before commit or deployment.**
+**Status: IN PROGRESS. Phases 4A, 4B, and 4C are complete and deployed; Phase
+4D verification and cleanup is the next checkpoint.**
 
 ### Objective
 
@@ -1049,6 +1049,29 @@ the management entry-search flow. The complete local suite contains 63 passing
 tests. The local bot was not started, the real local database was not changed,
 and production remains active on the deployed Phase 4B checkpoint.
 
+#### Phase 4C deployment checkpoint --- 2026-09-15 UTC
+
+-   The reviewed Phase 4C implementation, tests, and local checkpoint were
+    committed as `8ea7f0e`, pushed to `main`, and deployed to OCI.
+-   Before enabling page mutations, production `wiki.db` was backed up with
+    SQLite's backup API as
+    `/home/ubuntu/CoA_Codex/wiki-before-phase4c-20260915-031912.db`. The backup
+    passed integrity checking and contains 19 entries, 19 pages, 25
+    relationships, and six categories.
+-   The deployed source compiled successfully and all 63 tests passed on OCI
+    before restart.
+-   `coa-codex.service` restarted successfully at 03:20:17 UTC with PID 360549,
+    logged in to Discord, and connected to the gateway at 03:20:19 UTC.
+-   Post-restart SQLite integrity and foreign-key checks pass. Production still
+    has 19 entries, 19 pages, 25 relationships, six categories, and zero page-1
+    mirror mismatches; deployment itself did not change application data.
+-   The controlled Discord Add/Edit/Move/Delete exercise remains for Phase 4D.
+    Do not create a production page merely to prove the controls during this
+    deployment checkpoint.
+
+Phase 4C is complete and deployed. Phase 4D can now verify the complete
+multi-page lifecycle in the Test Server and perform final cleanup.
+
 ### Phase 4D --- Verification, deployment, and cleanup
 
 -   Run migration, helper, UI, navigation, permission, rollback, restart, and
@@ -1250,16 +1273,17 @@ As of 2026-09-15 UTC:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **in progress; Phases 4A and 4B are
-    complete and deployed; Phase 4C is implemented locally with all 63 tests
-    passing and is awaiting review before commit or deployment**
+-   Phase 4 multi-page wiki entries: **in progress; Phases 4A, 4B, and 4C are
+    complete, committed, pushed, deployed, and verified on OCI; all 63 tests
+    pass; controlled live Discord lifecycle testing remains for Phase 4D**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 4B deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 4C deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 4C code, tests, and documentation
-diff before committing, pushing, or deploying it.
+**Next development action:** begin Phase 4D verification and cleanup, including
+a controlled Test Server multi-page lifecycle check and final review of obsolete
+single-page assumptions.
 
 ## 27. Maintenance rule
 
