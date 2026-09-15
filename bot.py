@@ -1228,13 +1228,15 @@ def make_category_state(
 
 
 def make_entry_state(
-    entry_id: str
+    entry_id: str,
+    page_number: int = 1
 ):
     """Create a navigation state for a wiki entry."""
 
     return {
         "type": "entry",
-        "entry_id": entry_id
+        "entry_id": entry_id,
+        "page_number": page_number
     }
 
 def make_tags_state(page: int = 0):
@@ -2920,7 +2922,9 @@ class WikiEntryView(discord.ui.View):
         self,
         entry_id: str,
         author_id: int,
-        history=None
+        history=None,
+        page_number: int = 1,
+        total_pages: int = 1
     ):
 
         super().__init__(timeout=300)
@@ -2928,6 +2932,50 @@ class WikiEntryView(discord.ui.View):
         self.entry_id = entry_id
         self.author_id = author_id
         self.history = history or []
+        self.page_number = page_number
+        self.total_pages = total_pages
+
+        # --------------------------------------------------
+        # Entry Pages
+        # --------------------------------------------------
+
+        if self.total_pages > 1:
+
+            previous_button = discord.ui.Button(
+                label="Previous",
+                emoji="◀️",
+                style=discord.ButtonStyle.primary,
+                disabled=(self.page_number == 1),
+                row=0
+            )
+
+            previous_button.callback = self.previous_page
+
+            self.add_item(previous_button)
+
+            page_button = discord.ui.Button(
+                label=(
+                    f"Page {self.page_number} "
+                    f"/ {self.total_pages}"
+                ),
+                style=discord.ButtonStyle.secondary,
+                disabled=True,
+                row=0
+            )
+
+            self.add_item(page_button)
+
+            next_button = discord.ui.Button(
+                label="Next",
+                emoji="▶️",
+                style=discord.ButtonStyle.primary,
+                disabled=(self.page_number == self.total_pages),
+                row=0
+            )
+
+            next_button.callback = self.next_page
+
+            self.add_item(next_button)
 
         # --------------------------------------------------
         # Back
@@ -2989,6 +3037,100 @@ class WikiEntryView(discord.ui.View):
             )
 
             self.add_item(button)
+
+    # --------------------------------------------------
+    # Page Owner Check
+    # --------------------------------------------------
+
+    async def check_page_owner(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if interaction.user.id != self.author_id:
+
+            await interaction.response.send_message(
+                "❌ This Codex browser belongs to another user.",
+                ephemeral=True
+            )
+
+            return False
+
+        return True
+
+    # --------------------------------------------------
+    # Entry Pages
+    # --------------------------------------------------
+
+    async def show_page(
+        self,
+        interaction: discord.Interaction,
+        page_number: int
+    ):
+
+        entry = get_entry(
+            self.entry_id
+        )
+
+        if entry is None:
+
+            await interaction.response.send_message(
+                "❌ That wiki entry no longer exists.",
+                ephemeral=True
+            )
+
+            return
+
+        await display_wiki_entry(
+            interaction,
+            entry,
+            history=self.history,
+            page_number=page_number
+        )
+
+    async def previous_page(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if not await self.check_page_owner(interaction):
+            return
+
+        if self.page_number <= 1:
+
+            await interaction.response.send_message(
+                "❌ You are already on the first page.",
+                ephemeral=True
+            )
+
+            return
+
+        await self.show_page(
+            interaction,
+            self.page_number - 1
+        )
+
+    async def next_page(
+        self,
+        interaction: discord.Interaction
+    ):
+
+        if not await self.check_page_owner(interaction):
+            return
+
+        if self.page_number >= self.total_pages:
+
+            await interaction.response.send_message(
+                "❌ You are already on the last page.",
+                ephemeral=True
+            )
+
+            return
+
+        await self.show_page(
+            interaction,
+            self.page_number + 1
+        )
 
     # --------------------------------------------------
     # Back
@@ -3068,7 +3210,8 @@ class WikiEntryView(discord.ui.View):
 
             new_history = self.history + [
                 make_entry_state(
-                    self.entry_id
+                    self.entry_id,
+                    self.page_number
                 )
             ]
 
@@ -3185,7 +3328,8 @@ async def navigate_to_state(
         await display_wiki_entry(
             interaction,
             entry,
-            history=history
+            history=history,
+            page_number=state.get("page_number", 1)
         )
 
         return
@@ -3231,16 +3375,38 @@ async def navigate_to_state(
 # Display Wiki Entry
 # --------------------------------------------------
 
-async def display_wiki_entry(
-    interaction: discord.Interaction,
+def build_wiki_entry_embed(
     entry,
-    history=None
+    page_number: int = 1
 ):
+    """Build one entry page and return its resolved navigation details."""
 
-    if history is None:
-        history = []
+    entry_id, title, category, _content, tags, image_url = entry
 
-    entry_id, title, category, content, tags, image_url = entry
+    total_pages = get_entry_page_count(
+        entry_id
+    )
+
+    if not total_pages:
+        return None
+
+    if isinstance(page_number, bool) or not isinstance(page_number, int):
+        page_number = 1
+
+    page_number = max(
+        1,
+        min(page_number, total_pages)
+    )
+
+    page = get_entry_page(
+        entry_id,
+        page_number
+    )
+
+    if page is None:
+        return None
+
+    content = page[2]
 
     embed = discord.Embed(
         title=title,
@@ -3251,19 +3417,11 @@ async def display_wiki_entry(
     if image_url:
         embed.set_image(url=image_url)
 
-    # --------------------------------------------------
-    # Category
-    # --------------------------------------------------
-
     embed.add_field(
         name="📚 Category",
         value=category,
         inline=True
     )
-
-    # --------------------------------------------------
-    # Tags
-    # --------------------------------------------------
 
     if tags:
 
@@ -3272,10 +3430,6 @@ async def display_wiki_entry(
             value=tags,
             inline=True
         )
-
-    # --------------------------------------------------
-    # Relationships
-    # --------------------------------------------------
 
     relationships = get_relationships(
         entry_id
@@ -3312,13 +3466,44 @@ async def display_wiki_entry(
             inline=False
         )
 
-    # --------------------------------------------------
-    # Footer
-    # --------------------------------------------------
+    footer = f"Wiki ID: {entry_id}"
+
+    if total_pages > 1:
+        footer += f" • Page {page_number} / {total_pages}"
 
     embed.set_footer(
-        text=f"Wiki ID: {entry_id}"
+        text=footer
     )
+
+    return embed, page_number, total_pages
+
+
+async def display_wiki_entry(
+    interaction: discord.Interaction,
+    entry,
+    history=None,
+    page_number: int = 1
+):
+
+    if history is None:
+        history = []
+
+    display = build_wiki_entry_embed(
+        entry,
+        page_number
+    )
+
+    if display is None:
+
+        await interaction.response.send_message(
+            "❌ That wiki entry has no readable pages.",
+            ephemeral=True
+        )
+
+        return
+
+    embed, page_number, total_pages = display
+    entry_id = entry[0]
 
     # --------------------------------------------------
     # Navigation
@@ -3327,7 +3512,9 @@ async def display_wiki_entry(
     view = WikiEntryView(
         entry_id=entry_id,
         author_id=interaction.user.id,
-        history=history
+        history=history,
+        page_number=page_number,
+        total_pages=total_pages
     )
 
     await interaction.response.edit_message(
@@ -3366,84 +3553,28 @@ async def wiki(
 
         return
 
-    entry_id, title, category, content, tags, image_url = entry
-
-    embed = discord.Embed(
-        title=title,
-        description=content,
-        color=discord.Color.blurple()
+    display = build_wiki_entry_embed(
+        entry
     )
 
-    if image_url:
-        embed.set_image(url=image_url)
+    if display is None:
 
-    # --------------------------------------------------
-    # Category
-    # --------------------------------------------------
-
-    embed.add_field(
-        name="📚 Category",
-        value=category,
-        inline=True
-    )
-
-    # --------------------------------------------------
-    # Tags
-    # --------------------------------------------------
-
-    if tags:
-
-        embed.add_field(
-            name="🏷️ Tags",
-            value=tags,
-            inline=True
+        await interaction.response.send_message(
+            "❌ That wiki entry has no readable pages.",
+            ephemeral=True
         )
 
-    # --------------------------------------------------
-    # Related Entries
-    # --------------------------------------------------
+        return
 
-    relationships = get_relationships(entry_id)
-
-    if relationships:
-
-        relationship_lines = []
-
-        for (
-            relationship,
-            related_id,
-            related_title,
-            related_category
-        ) in relationships:
-
-            relationship_name = (
-                relationship
-                .replace("_", " ")
-                .title()
-            )
-
-            relationship_lines.append(
-                f"**{relationship_name}:** "
-                f"{related_title} "
-                f"`[{related_category}]`"
-            )
-
-        embed.add_field(
-            name="🔗 Related Entries",
-            value="\n".join(
-                relationship_lines
-            ),
-            inline=False
-        )
-
-    embed.set_footer(
-        text=f"Wiki ID: {entry_id}"
-    )
+    embed, page_number, total_pages = display
+    entry_id = entry[0]
 
     view = WikiEntryView(
         entry_id=entry_id,
         author_id=interaction.user.id,
-        history=[]
+        history=[],
+        page_number=page_number,
+        total_pages=total_pages
     )
 
     await interaction.response.send_message(

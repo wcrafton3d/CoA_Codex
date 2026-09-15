@@ -831,8 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phase 4A is complete and deployed; Phase 4B is the next
-development checkpoint.**
+**Status: IN PROGRESS. Phase 4A is complete and deployed. Phase 4B is
+implemented and tested locally, awaiting review before commit or deployment.**
 
 ### Objective
 
@@ -951,6 +951,35 @@ navigation against the deployed page foundation.
 **Intended result:** readers can cycle through all pages belonging to the same
 entry without producing extra persistent messages or losing their prior
 navigation context.
+
+#### Phase 4B local checkpoint --- 2026-09-15 UTC
+
+The local implementation now uses `wiki_entry_pages` as the content source for
+both `/wiki` and every entry opened through category, search, tag, related-entry,
+and navigation-history paths. A shared embed builder resolves and clamps the
+requested page, renders one stored page, and preserves the existing category,
+tags, image, and relationship presentation.
+
+Multi-page entries receive owner-bound Previous and Next buttons plus a disabled
+`Page X / Y` indicator. The first and last controls disable at their respective
+boundaries. One-page entries retain the prior footer and omit all page controls.
+The complete navigation row still fits alongside the existing maximum of 20
+relationship buttons within Discord's 25-component limit.
+
+Entry navigation history now records the current page number. Following a
+related entry and pressing Back therefore restores the same page, while Home
+and the category/search/tag history paths retain their existing behavior.
+Missing entries, entries with no readable pages, missing requested rows, and
+out-of-range stale page numbers fail safely or resolve to the nearest valid
+page without replacing the current message with invalid content.
+
+Eight focused Phase 4B tests cover page-store rendering, the unchanged
+single-page presentation, first/middle/last controls, owner binding, maximum
+component count, related-entry history, `/wiki`, and missing/empty/stale states.
+The full local suite contains 53 passing tests. Source compilation, Python 3.10
+grammar parsing, and diff whitespace checks pass. The local bot was not started,
+the real local database was not changed, and production remains active on the
+deployed Phase 4A checkpoint.
 
 ### Phase 4C --- Worldbuilder page management
 
@@ -1166,16 +1195,16 @@ As of 2026-09-15 UTC:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **in progress; Phase 4A is complete,
-    committed, pushed, deployed, and verified on OCI; all 45 tests pass**
+-   Phase 4 multi-page wiki entries: **in progress; Phase 4A is complete and
+    deployed; Phase 4B is implemented locally with all 53 tests passing and is
+    awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 4A deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** begin Phase 4B entry reading and page navigation,
-preserving the existing Back/Home navigation context and the uncluttered
-single-page experience.
+**Next development action:** review the Phase 4B code, tests, and documentation
+diff before committing, pushing, or deploying it.
 
 ## 27. Maintenance rule
 
