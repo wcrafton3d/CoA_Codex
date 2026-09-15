@@ -147,7 +147,7 @@ relationship data during migrations.
 
 ### wiki_entry_pages
 
-Phase 4A adds this ordered page store locally; it is not deployed yet:
+Phase 4A added and deployed this ordered page store:
 
 ``` sql
 CREATE TABLE IF NOT EXISTS wiki_entry_pages (
@@ -831,8 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phase 4A is implemented and tested locally; it has not
-been committed, pushed, or deployed.**
+**Status: IN PROGRESS. Phase 4A is complete and deployed; Phase 4B is the next
+development checkpoint.**
 
 ### Objective
 
@@ -913,6 +913,32 @@ mismatches, and retained SQLite integrity. The complete local suite now has 45
 tests, including 10 focused Phase 4A tests for legacy oversized content,
 idempotence, seeding, rollback, locking, stable ownership, ordering, mirroring,
 and cascade deletion.
+
+#### Phase 4A deployment checkpoint --- 2026-09-15 UTC
+
+-   The roadmap definition was committed as `b5dec9c` and the reviewed Phase
+    4A implementation was committed as `177c64f`; both commits were pushed to
+    `main` and deployed to OCI.
+-   Before migration, production `wiki.db` was backed up as
+    `/home/ubuntu/CoA_Codex/wiki-before-phase4a-20260915-021952.db`.
+-   The deployed source compiled successfully and all 45 tests passed on OCI
+    before the service restart.
+-   `coa-codex.service` restarted successfully, logged in to Discord, and
+    connected to the gateway.
+-   The production migration preserved 19 entries, 25 relationships, and six
+    categories, and created exactly 19 page-1 rows. There are zero missing
+    page-1 rows, content mirror mismatches, extra pages, duplicate page
+    numbers, ordering gaps, or orphan pages.
+-   SQLite reports `integrity_check = ok`, an empty foreign-key check, the
+    expected unique `(entry_id, page_number)` index, and the expected
+    `ON DELETE CASCADE` page relationship. The bootstrap marker remains
+    `(1, 'complete')` and the maximum existing content length remains 4,000.
+-   Discord behavior is intentionally unchanged in Phase 4A, so this
+    deployment required database and startup verification rather than a new
+    live UI mutation.
+
+Phase 4A is complete. Phase 4B can now implement entry reading and page
+navigation against the deployed page foundation.
 
 ### Phase 4B --- Entry reading and page navigation
 
@@ -1118,7 +1144,7 @@ behavior.
 
 ## 26. Immediate handoff summary
 
-As of 2026-09-14:
+As of 2026-09-15 UTC:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
@@ -1140,15 +1166,16 @@ As of 2026-09-14:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **in progress; Phase 4A is implemented and
-    tested locally, awaiting review before commit or deployment**
+-   Phase 4 multi-page wiki entries: **in progress; Phase 4A is complete,
+    committed, pushed, deployed, and verified on OCI; all 45 tests pass**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 3F deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 4A deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 4A implementation and migration
-diff before committing, pushing, or deploying it.
+**Next development action:** begin Phase 4B entry reading and page navigation,
+preserving the existing Back/Home navigation context and the uncluttered
+single-page experience.
 
 ## 27. Maintenance rule
 
