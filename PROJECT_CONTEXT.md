@@ -831,8 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phase 4A is complete and deployed. Phase 4B is
-implemented and tested locally, awaiting review before commit or deployment.**
+**Status: IN PROGRESS. Phases 4A and 4B are complete and deployed; Phase 4C is
+the next development checkpoint.**
 
 ### Objective
 
@@ -980,6 +980,27 @@ The full local suite contains 53 passing tests. Source compilation, Python 3.10
 grammar parsing, and diff whitespace checks pass. The local bot was not started,
 the real local database was not changed, and production remains active on the
 deployed Phase 4A checkpoint.
+
+#### Phase 4B deployment checkpoint --- 2026-09-15 UTC
+
+-   The reviewed Phase 4B implementation, tests, and local checkpoint were
+    committed as `536ba49`, pushed to `main`, and deployed to OCI.
+-   Phase 4B changes only entry reads, embeds, and navigation state; it does not
+    change the schema or any database write path. No additional production
+    database backup was required for this deployment.
+-   The deployed source compiled successfully and all 53 tests passed on OCI
+    before restart.
+-   `coa-codex.service` restarted successfully at 02:49:35 UTC with PID 359482,
+    logged in to Discord, and connected to the gateway at 02:49:37 UTC.
+-   Post-restart SQLite integrity and foreign-key checks pass. Production still
+    has 19 entries and 19 page rows with zero page-1 mirror mismatches.
+-   Every production entry currently has one page, so the multi-page controls
+    cannot be exercised live without directly changing production data. The
+    deployed one-page path omits those controls by design. A controlled live
+    multi-page test should follow the Phase 4C Discord page-management flow.
+
+Phase 4B is complete. Phase 4C can now add Worldbuilder page-management actions
+on top of the deployed reader and navigation behavior.
 
 ### Phase 4C --- Worldbuilder page management
 
@@ -1195,16 +1216,17 @@ As of 2026-09-15 UTC:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **in progress; Phase 4A is complete and
-    deployed; Phase 4B is implemented locally with all 53 tests passing and is
-    awaiting review before commit or deployment**
+-   Phase 4 multi-page wiki entries: **in progress; Phases 4A and 4B are
+    complete, committed, pushed, deployed, and verified on OCI; all 53 tests
+    pass**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 4A deployment**.
+-   Local bot: **stopped**; OCI: **active and connected after Phase 4B deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 4B code, tests, and documentation
-diff before committing, pushing, or deploying it.
+**Next development action:** begin Phase 4C Worldbuilder page management,
+including Add Page, page selection for editing/deletion, safe reordering, and
+role/stale-state safeguards.
 
 ## 27. Maintenance rule
 
