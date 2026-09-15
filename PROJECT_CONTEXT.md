@@ -831,8 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phases 4A and 4B are complete and deployed; Phase 4C is
-the next development checkpoint.**
+**Status: IN PROGRESS. Phases 4A and 4B are complete and deployed. Phase 4C is
+implemented and tested locally, awaiting review before commit or deployment.**
 
 ### Objective
 
@@ -1014,6 +1014,40 @@ on top of the deployed reader and navigation behavior.
 
 **Intended result:** Worldbuilders can add, edit, order, and remove entry pages
 entirely through Discord while ordinary users retain read-only navigation.
+
+#### Phase 4C local checkpoint --- 2026-09-15 UTC
+
+The local `/wiki-manage` panel now includes **Manage Pages** as its fifth entry
+action. It uses the existing entry search and selection flow, then opens an
+owner-bound page manager that rechecks the Worldbuilder role on every component
+interaction. Page choices use stable numeric page IDs, display page numbers and
+content lengths, and paginate in groups of 25 to stay within Discord's select
+option limit.
+
+The page manager provides:
+
+-   **Add Page**, which opens a required 1--4,000-character content modal and
+    appends through the write-locked Phase 4A helper
+-   **Edit Page**, which reloads the selected stable ID before opening the
+    modal and refreshes the manager after submission
+-   **Move Up** and **Move Down**, which move the selected stable ID exactly one
+    position and display current boundary/stale-state results
+-   **Delete Page**, which reloads the selection, refuses the sole page,
+    requires a separate owner-bound confirmation, rechecks state at submission,
+    and reports that remaining pages were renumbered
+
+Modal submissions recheck the Worldbuilder role. Missing entries/pages,
+concurrent deletion or reordering, validation failures, and SQLite errors
+produce ephemeral errors without guessing at state. A preserved legacy page
+over 4,000 characters is shown in the manager but cannot be opened in Discord's
+4,000-character editor, preventing silent truncation or data loss.
+
+Ten focused Phase 4C tests cover layouts, stable selection, lists over 25 pages,
+owner and role checks, Add/Edit/Delete/Move behavior, only-page protection,
+stale state, legacy oversized content, database failures, and integration with
+the management entry-search flow. The complete local suite contains 63 passing
+tests. The local bot was not started, the real local database was not changed,
+and production remains active on the deployed Phase 4B checkpoint.
 
 ### Phase 4D --- Verification, deployment, and cleanup
 
@@ -1217,16 +1251,15 @@ As of 2026-09-15 UTC:
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
 -   Phase 4 multi-page wiki entries: **in progress; Phases 4A and 4B are
-    complete, committed, pushed, deployed, and verified on OCI; all 53 tests
-    pass**
+    complete and deployed; Phase 4C is implemented locally with all 63 tests
+    passing and is awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 4B deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** begin Phase 4C Worldbuilder page management,
-including Add Page, page selection for editing/deletion, safe reordering, and
-role/stale-state safeguards.
+**Next development action:** review the Phase 4C code, tests, and documentation
+diff before committing, pushing, or deploying it.
 
 ## 27. Maintenance rule
 

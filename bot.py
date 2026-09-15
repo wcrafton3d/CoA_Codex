@@ -5239,6 +5239,22 @@ class WikiSearchResultView(discord.ui.View):
             return
 
         # --------------------------------------------------
+        # Manage Pages
+        # --------------------------------------------------
+
+        if self.mode == "pages":
+
+            if not await require_worldbuilder(interaction):
+                return
+
+            await send_entry_page_manager(
+                interaction,
+                entry_id
+            )
+
+            return
+
+        # --------------------------------------------------
         # Delete
         # --------------------------------------------------
 
@@ -5291,6 +5307,624 @@ class WikiSearchResultView(discord.ui.View):
             )
 
             return
+
+# --------------------------------------------------
+# Entry Page Management
+# --------------------------------------------------
+
+async def send_entry_page_manager(
+    interaction: discord.Interaction,
+    entry_id: str,
+    selected_page_id=None,
+    page=None,
+    edit: bool = False,
+    notice=None
+):
+    """Load current page state and send or refresh its management view."""
+
+    try:
+        entry = get_entry(entry_id)
+        pages = get_entry_pages(entry_id) if entry is not None else []
+    except sqlite3.Error:
+        message = "❌ Entry pages could not be loaded because of a database error."
+        if edit:
+            await interaction.response.edit_message(
+                content=message,
+                view=None
+            )
+        else:
+            await interaction.response.send_message(
+                message,
+                ephemeral=True
+            )
+        return
+
+    if entry is None:
+        message = "❌ That wiki entry no longer exists."
+        if edit:
+            await interaction.response.edit_message(
+                content=message,
+                view=None
+            )
+        else:
+            await interaction.response.send_message(
+                message,
+                ephemeral=True
+            )
+        return
+
+    view = WikiEntryPageManagementView(
+        author_id=interaction.user.id,
+        entry=entry,
+        pages=pages,
+        selected_page_id=selected_page_id,
+        page=page
+    )
+    content = view.prompt()
+    if notice:
+        content = f"{notice}\n\n{content}"
+
+    if edit:
+        await interaction.response.edit_message(
+            content=content,
+            view=view
+        )
+    else:
+        await interaction.response.send_message(
+            content,
+            view=view,
+            ephemeral=True
+        )
+
+
+class WikiEntryPageAddModal(discord.ui.Modal):
+
+    def __init__(self, entry_id: str):
+        super().__init__(title="Add Wiki Entry Page")
+        self.entry_id = entry_id
+        self.content = discord.ui.TextInput(
+            label="Page Content",
+            placeholder="Enter the next page of the wiki entry...",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=4000
+        )
+        self.add_item(self.content)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await require_worldbuilder(interaction):
+            return
+
+        try:
+            result = add_entry_page(
+                self.entry_id,
+                self.content.value.strip()
+            )
+        except ValueError as error:
+            await interaction.response.send_message(
+                f"❌ {error}",
+                ephemeral=True
+            )
+            return
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ The page could not be added because of a database error.",
+                ephemeral=True
+            )
+            return
+
+        if result == "not_found":
+            await interaction.response.send_message(
+                "❌ That wiki entry no longer exists.",
+                ephemeral=True
+            )
+            return
+
+        try:
+            pages = get_entry_pages(self.entry_id)
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "✅ Page added, but the refreshed page list could not be loaded.",
+                ephemeral=True
+            )
+            return
+
+        selected_page_id = pages[-1][0] if pages else None
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            selected_page_id=selected_page_id,
+            edit=True,
+            notice="✅ Page added."
+        )
+
+
+class WikiEntryPageEditModal(discord.ui.Modal):
+
+    def __init__(
+        self,
+        entry_id: str,
+        page_id: int,
+        page_number: int,
+        content: str
+    ):
+        super().__init__(title="Edit Wiki Entry Page")
+        self.entry_id = entry_id
+        self.page_id = page_id
+        self.page_number = page_number
+        self.content = discord.ui.TextInput(
+            label=f"Page {page_number} Content",
+            default=content,
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=4000
+        )
+        self.add_item(self.content)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not await require_worldbuilder(interaction):
+            return
+
+        try:
+            result = update_entry_page(
+                self.entry_id,
+                self.page_id,
+                self.content.value.strip()
+            )
+        except ValueError as error:
+            await interaction.response.send_message(
+                f"❌ {error}",
+                ephemeral=True
+            )
+            return
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ The page could not be updated because of a database error.",
+                ephemeral=True
+            )
+            return
+
+        if result == "not_found":
+            await send_entry_page_manager(
+                interaction,
+                self.entry_id,
+                edit=True,
+                notice="❌ That page no longer exists."
+            )
+            return
+
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            selected_page_id=self.page_id,
+            edit=True,
+            notice="✅ Page updated."
+        )
+
+
+class WikiEntryPageDeleteConfirmationView(discord.ui.View):
+
+    def __init__(
+        self,
+        author_id: int,
+        entry_id: str,
+        page_id: int,
+        page_number: int
+    ):
+        super().__init__(timeout=300)
+        self.author_id = author_id
+        self.entry_id = entry_id
+        self.page_id = page_id
+        self.page_number = page_number
+
+        confirm = discord.ui.Button(
+            label="Delete Page",
+            emoji="🗑️",
+            style=discord.ButtonStyle.danger
+        )
+        confirm.callback = self.confirm_delete
+        self.add_item(confirm)
+
+        cancel = discord.ui.Button(
+            label="Cancel",
+            style=discord.ButtonStyle.secondary
+        )
+        cancel.callback = self.cancel_delete
+        self.add_item(cancel)
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "⛔ This page confirmation belongs to another Worldbuilder.",
+                ephemeral=True
+            )
+            return False
+        return await require_worldbuilder(interaction)
+
+    async def confirm_delete(self, interaction: discord.Interaction):
+        try:
+            result = delete_entry_page(
+                self.entry_id,
+                self.page_id
+            )
+        except (ValueError, sqlite3.Error):
+            await interaction.response.send_message(
+                "❌ The page could not be deleted because of a database error.",
+                ephemeral=True
+            )
+            return
+
+        if result == "only_page":
+            await send_entry_page_manager(
+                interaction,
+                self.entry_id,
+                selected_page_id=self.page_id,
+                edit=True,
+                notice="❌ The only remaining page cannot be deleted."
+            )
+            return
+
+        if result == "not_found":
+            await send_entry_page_manager(
+                interaction,
+                self.entry_id,
+                edit=True,
+                notice="❌ That page no longer exists."
+            )
+            return
+
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            page=max(0, (self.page_number - 2) // 25),
+            edit=True,
+            notice="✅ Page deleted and remaining pages renumbered."
+        )
+
+    async def cancel_delete(self, interaction: discord.Interaction):
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            selected_page_id=self.page_id,
+            edit=True,
+            notice="Page deletion cancelled."
+        )
+
+
+class WikiEntryPageManagementView(discord.ui.View):
+
+    PAGE_SIZE = 25
+
+    def __init__(
+        self,
+        author_id: int,
+        entry,
+        pages,
+        selected_page_id=None,
+        page=None
+    ):
+        super().__init__(timeout=300)
+        self.author_id = author_id
+        self.entry_id = entry[0]
+        self.entry_title = entry[1]
+        self.pages = list(pages)
+        self.page_count = max(
+            1,
+            (len(self.pages) + self.PAGE_SIZE - 1) // self.PAGE_SIZE
+        )
+
+        selected = next(
+            (
+                stored_page for stored_page in self.pages
+                if stored_page[0] == selected_page_id
+            ),
+            None
+        )
+        if page is None:
+            page = (
+                (selected[1] - 1) // self.PAGE_SIZE
+                if selected is not None
+                else 0
+            )
+        self.page = max(0, min(page, self.page_count - 1))
+
+        start = self.page * self.PAGE_SIZE
+        page_rows = self.pages[start:start + self.PAGE_SIZE]
+        if selected not in page_rows:
+            selected = page_rows[0] if page_rows else None
+        self.selected_page = selected
+        self.selected_page_id = selected[0] if selected is not None else None
+
+        if page_rows:
+            options = []
+            for page_id, page_number, content in page_rows:
+                summary = " ".join(content.split()) or "(empty page)"
+                options.append(discord.SelectOption(
+                    label=f"Page {page_number}",
+                    value=str(page_id),
+                    description=(
+                        f"{len(content):,} characters • {summary}"
+                    )[:100],
+                    default=(page_id == self.selected_page_id)
+                ))
+            select = discord.ui.Select(
+                placeholder="Select a page to manage...",
+                options=options,
+                min_values=1,
+                max_values=1,
+                row=0
+            )
+            select.callback = self.select_page
+            self.add_item(select)
+
+        add_button = discord.ui.Button(
+            label="Add Page",
+            emoji="➕",
+            style=discord.ButtonStyle.success,
+            row=1
+        )
+        add_button.callback = self.add_page
+        self.add_item(add_button)
+
+        edit_button = discord.ui.Button(
+            label="Edit Page",
+            emoji="✏️",
+            style=discord.ButtonStyle.primary,
+            disabled=(self.selected_page is None),
+            row=1
+        )
+        edit_button.callback = self.edit_page
+        self.add_item(edit_button)
+
+        delete_button = discord.ui.Button(
+            label="Delete Page",
+            emoji="🗑️",
+            style=discord.ButtonStyle.danger,
+            disabled=(len(self.pages) <= 1),
+            row=1
+        )
+        delete_button.callback = self.delete_page
+        self.add_item(delete_button)
+
+        move_up_button = discord.ui.Button(
+            label="Move Up",
+            emoji="⬆️",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.selected_page is None
+                or self.selected_page[1] <= 1
+            ),
+            row=2
+        )
+        move_up_button.callback = self.move_up
+        self.add_item(move_up_button)
+
+        move_down_button = discord.ui.Button(
+            label="Move Down",
+            emoji="⬇️",
+            style=discord.ButtonStyle.secondary,
+            disabled=(
+                self.selected_page is None
+                or self.selected_page[1] >= len(self.pages)
+            ),
+            row=2
+        )
+        move_down_button.callback = self.move_down
+        self.add_item(move_down_button)
+
+        if self.page_count > 1:
+            previous_button = discord.ui.Button(
+                label="Previous Pages",
+                emoji="◀️",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page == 0),
+                row=3
+            )
+            previous_button.callback = self.previous_page
+            self.add_item(previous_button)
+
+            next_button = discord.ui.Button(
+                label="Next Pages",
+                emoji="▶️",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page >= self.page_count - 1),
+                row=3
+            )
+            next_button.callback = self.next_page
+            self.add_item(next_button)
+
+    def prompt(self):
+        message = (
+            f"📄 Manage pages for **{self.entry_title}** "
+            f"(`{self.entry_id}`).\n"
+            f"This entry has **{len(self.pages)}** "
+            f"{'page' if len(self.pages) == 1 else 'pages'}."
+        )
+        if self.selected_page is not None:
+            message += (
+                f"\nSelected: **Page {self.selected_page[1]}** "
+                f"({len(self.selected_page[2]):,} characters)."
+            )
+        if self.page_count > 1:
+            message += f"\nPage list {self.page + 1} of {self.page_count}."
+        return message
+
+    async def interaction_check(
+        self,
+        interaction: discord.Interaction
+    ) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "⛔ This page manager belongs to another Worldbuilder.",
+                ephemeral=True
+            )
+            return False
+        return await require_worldbuilder(interaction)
+
+    async def select_page(self, interaction: discord.Interaction):
+        try:
+            selected_page_id = int(interaction.data["values"][0])
+        except (KeyError, TypeError, ValueError, IndexError):
+            await interaction.response.send_message(
+                "❌ That page selection is invalid.",
+                ephemeral=True
+            )
+            return
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            selected_page_id=selected_page_id,
+            edit=True
+        )
+
+    async def add_page(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            WikiEntryPageAddModal(self.entry_id)
+        )
+
+    async def _load_selected_page(self, interaction: discord.Interaction):
+        if self.selected_page_id is None:
+            await interaction.response.send_message(
+                "❌ This entry has no page selected.",
+                ephemeral=True
+            )
+            return None
+        try:
+            pages = get_entry_pages(self.entry_id)
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ Entry pages could not be loaded because of a database error.",
+                ephemeral=True
+            )
+            return None
+        selected = next(
+            (page for page in pages if page[0] == self.selected_page_id),
+            None
+        )
+        if selected is None:
+            await interaction.response.send_message(
+                "❌ That page no longer exists. Refresh the page manager.",
+                ephemeral=True
+            )
+        return selected
+
+    async def edit_page(self, interaction: discord.Interaction):
+        selected = await self._load_selected_page(interaction)
+        if selected is None:
+            return
+        if len(selected[2]) > 4000:
+            await interaction.response.send_message(
+                "❌ This legacy page exceeds Discord's 4,000-character "
+                "editor limit. Its content has been preserved, but it "
+                "cannot be edited in this modal.",
+                ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(
+            WikiEntryPageEditModal(
+                self.entry_id,
+                selected[0],
+                selected[1],
+                selected[2]
+            )
+        )
+
+    async def delete_page(self, interaction: discord.Interaction):
+        selected = await self._load_selected_page(interaction)
+        if selected is None:
+            return
+        try:
+            current_pages = get_entry_pages(self.entry_id)
+        except sqlite3.Error:
+            await interaction.response.send_message(
+                "❌ Entry pages could not be loaded because of a database error.",
+                ephemeral=True
+            )
+            return
+        if len(current_pages) <= 1:
+            await interaction.response.send_message(
+                "❌ The only remaining page cannot be deleted.",
+                ephemeral=True
+            )
+            return
+        await interaction.response.edit_message(
+            content=(
+                f"⚠️ Delete **Page {selected[1]}** from "
+                f"**{self.entry_title}**? Remaining pages will be "
+                "renumbered."
+            ),
+            view=WikiEntryPageDeleteConfirmationView(
+                author_id=self.author_id,
+                entry_id=self.entry_id,
+                page_id=selected[0],
+                page_number=selected[1]
+            )
+        )
+
+    async def move_selected(
+        self,
+        interaction: discord.Interaction,
+        direction: int
+    ):
+        if self.selected_page_id is None:
+            await interaction.response.send_message(
+                "❌ This entry has no page selected.",
+                ephemeral=True
+            )
+            return
+        try:
+            result = move_entry_page(
+                self.entry_id,
+                self.selected_page_id,
+                direction
+            )
+        except (ValueError, sqlite3.Error):
+            await interaction.response.send_message(
+                "❌ The page could not be moved because of a database error.",
+                ephemeral=True
+            )
+            return
+
+        notices = {
+            "success": "✅ Page moved.",
+            "not_found": "❌ That page no longer exists.",
+            "at_boundary": "❌ That page is already at the requested boundary."
+        }
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            selected_page_id=(
+                self.selected_page_id if result != "not_found" else None
+            ),
+            edit=True,
+            notice=notices[result]
+        )
+
+    async def move_up(self, interaction: discord.Interaction):
+        await self.move_selected(interaction, -1)
+
+    async def move_down(self, interaction: discord.Interaction):
+        await self.move_selected(interaction, 1)
+
+    async def previous_page(self, interaction: discord.Interaction):
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            page=self.page - 1,
+            edit=True
+        )
+
+    async def next_page(self, interaction: discord.Interaction):
+        await send_entry_page_manager(
+            interaction,
+            self.entry_id,
+            page=self.page + 1,
+            edit=True
+        )
+
 
 # --------------------------------------------------
 # CATEGORY MANAGEMENT
@@ -5795,6 +6429,23 @@ class WikiManagementView(discord.ui.View):
         self.add_item(delete_button)
 
         # --------------------------------------------------
+        # Manage Entry Pages
+        # --------------------------------------------------
+
+        pages_button = discord.ui.Button(
+            label="Manage Pages",
+            emoji="📄",
+            style=discord.ButtonStyle.primary,
+            row=0
+        )
+
+        pages_button.callback = (
+            self.create_pages_callback()
+        )
+
+        self.add_item(pages_button)
+
+        # --------------------------------------------------
         # Category Management
         # --------------------------------------------------
 
@@ -5942,6 +6593,25 @@ class WikiManagementView(discord.ui.View):
         return callback
 
     # --------------------------------------------------
+    # Manage Entry Pages
+    # --------------------------------------------------
+
+    def create_pages_callback(self):
+
+        async def callback(
+            interaction: discord.Interaction
+        ):
+
+            await interaction.response.send_modal(
+                WikiEntrySearchModal(
+                    mode="pages",
+                    author_id=interaction.user.id
+                )
+            )
+
+        return callback
+
+    # --------------------------------------------------
     # Category Management
     # --------------------------------------------------
 
@@ -6061,6 +6731,15 @@ async def wiki_manage(
         value=(
             "Permanently remove an entry "
             "from the Codex."
+        ),
+        inline=True
+    )
+
+    embed.add_field(
+        name="📄 Manage Pages",
+        value=(
+            "Add, edit, reorder, or delete "
+            "pages within an entry."
         ),
         inline=True
     )
