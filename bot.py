@@ -144,6 +144,7 @@ def add_entry(
     """
     connection = sqlite3.connect(DATABASE)
     try:
+        connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("""
@@ -165,7 +166,13 @@ def add_entry(
                 tags,
                 image_url
             ))
-            return "success" if cursor.rowcount else "duplicate"
+            if not cursor.rowcount:
+                return "duplicate"
+            connection.execute("""
+                INSERT INTO wiki_entry_pages (entry_id, page_number, content)
+                VALUES (?, 1, ?)
+            """, (entry_id, content))
+            return "success"
     finally:
         connection.close()
 
@@ -188,46 +195,289 @@ def get_entry(entry_id):
 
     return entry
 
+
+def _validate_entry_page_content(content: str) -> str:
+    """Validate content accepted by Discord's entry-page authoring flow."""
+
+    if not isinstance(content, str):
+        raise ValueError("Page content must be text.")
+    if not content.strip():
+        raise ValueError("Page content cannot be empty.")
+    if len(content) > 4000:
+        raise ValueError("Page content cannot exceed 4,000 characters.")
+    return content
+
+
+def _validate_entry_page_id(page_id: int) -> int:
+    """Return a valid stable page identifier."""
+
+    if isinstance(page_id, bool) or not isinstance(page_id, int) or page_id < 1:
+        raise ValueError("Page ID must be a positive integer.")
+    return page_id
+
+
+def _sync_entry_page_one(connection, entry_id: str):
+    """Mirror page 1 into wiki_entries.content during the Phase 4 transition."""
+
+    row = connection.execute("""
+        SELECT content FROM wiki_entry_pages
+        WHERE entry_id = ? AND page_number = 1
+    """, (entry_id,)).fetchone()
+    if row is not None:
+        connection.execute("""
+            UPDATE wiki_entries SET content = ? WHERE id = ?
+        """, (row[0], entry_id))
+
+
+def get_entry_pages(entry_id: str):
+    """Return an entry's pages as ``(id, page_number, content)`` tuples."""
+
+    connection = sqlite3.connect(DATABASE)
+    try:
+        return connection.execute("""
+            SELECT id, page_number, content
+            FROM wiki_entry_pages
+            WHERE entry_id = ?
+            ORDER BY page_number
+        """, (entry_id.lower(),)).fetchall()
+    finally:
+        connection.close()
+
+
+def get_entry_page(entry_id: str, page_number: int = 1):
+    """Return one ordered page tuple, or ``None`` when it does not exist."""
+
+    if isinstance(page_number, bool) or not isinstance(page_number, int):
+        raise ValueError("Page number must be a positive integer.")
+    if page_number < 1:
+        raise ValueError("Page number must be a positive integer.")
+    connection = sqlite3.connect(DATABASE)
+    try:
+        return connection.execute("""
+            SELECT id, page_number, content
+            FROM wiki_entry_pages
+            WHERE entry_id = ? AND page_number = ?
+        """, (entry_id.lower(), page_number)).fetchone()
+    finally:
+        connection.close()
+
+
+def get_entry_page_count(entry_id: str):
+    """Return an entry's page count, or ``None`` when the entry is missing."""
+
+    connection = sqlite3.connect(DATABASE)
+    try:
+        row = connection.execute("""
+            SELECT COUNT(p.id)
+            FROM wiki_entries AS e
+            LEFT JOIN wiki_entry_pages AS p ON p.entry_id = e.id
+            WHERE e.id = ?
+            GROUP BY e.id
+        """, (entry_id.lower(),)).fetchone()
+        return row[0] if row is not None else None
+    finally:
+        connection.close()
+
+
+def add_entry_page(entry_id: str, content: str) -> str:
+    """Append a page, returning ``success`` or ``not_found``."""
+
+    content = _validate_entry_page_content(content)
+    entry_id = entry_id.lower()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute(
+                "SELECT 1 FROM wiki_entries WHERE id = ?",
+                (entry_id,)
+            ).fetchone() is None:
+                return "not_found"
+            page_number = connection.execute("""
+                SELECT COALESCE(MAX(page_number), 0) + 1
+                FROM wiki_entry_pages WHERE entry_id = ?
+            """, (entry_id,)).fetchone()[0]
+            connection.execute("""
+                INSERT INTO wiki_entry_pages (entry_id, page_number, content)
+                VALUES (?, ?, ?)
+            """, (entry_id, page_number, content))
+            if page_number == 1:
+                _sync_entry_page_one(connection, entry_id)
+            return "success"
+    finally:
+        connection.close()
+
+
+def update_entry_page(entry_id: str, page_id: int, content: str) -> str:
+    """Update a stable page ID, returning ``success`` or ``not_found``."""
+
+    page_id = _validate_entry_page_id(page_id)
+    content = _validate_entry_page_content(content)
+    entry_id = entry_id.lower()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT page_number FROM wiki_entry_pages
+                WHERE id = ? AND entry_id = ?
+            """, (page_id, entry_id)).fetchone()
+            if row is None:
+                return "not_found"
+            connection.execute(
+                "UPDATE wiki_entry_pages SET content = ? WHERE id = ?",
+                (content, page_id)
+            )
+            if row[0] == 1:
+                _sync_entry_page_one(connection, entry_id)
+            return "success"
+    finally:
+        connection.close()
+
+
+def delete_entry_page(entry_id: str, page_id: int) -> str:
+    """Delete a page and close its ordering gap without deleting the last page."""
+
+    page_id = _validate_entry_page_id(page_id)
+    entry_id = entry_id.lower()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT page_number FROM wiki_entry_pages
+                WHERE id = ? AND entry_id = ?
+            """, (page_id, entry_id)).fetchone()
+            if row is None:
+                return "not_found"
+            page_count = connection.execute("""
+                SELECT COUNT(*) FROM wiki_entry_pages WHERE entry_id = ?
+            """, (entry_id,)).fetchone()[0]
+            if page_count <= 1:
+                return "only_page"
+            deleted_number = row[0]
+            connection.execute(
+                "DELETE FROM wiki_entry_pages WHERE id = ?",
+                (page_id,)
+            )
+            offset = page_count + 1
+            connection.execute("""
+                UPDATE wiki_entry_pages
+                SET page_number = page_number + ?
+                WHERE entry_id = ? AND page_number > ?
+            """, (offset, entry_id, deleted_number))
+            connection.execute("""
+                UPDATE wiki_entry_pages
+                SET page_number = page_number - ? - 1
+                WHERE entry_id = ? AND page_number > ?
+            """, (offset, entry_id, offset + deleted_number))
+            _sync_entry_page_one(connection, entry_id)
+            return "success"
+    finally:
+        connection.close()
+
+
+def move_entry_page(entry_id: str, page_id: int, direction: int) -> str:
+    """Move a page one position, preserving its stable ID."""
+
+    page_id = _validate_entry_page_id(page_id)
+    if isinstance(direction, bool) or direction not in (-1, 1):
+        raise ValueError("Page direction must be -1 or 1.")
+    entry_id = entry_id.lower()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("""
+                SELECT page_number FROM wiki_entry_pages
+                WHERE id = ? AND entry_id = ?
+            """, (page_id, entry_id)).fetchone()
+            if row is None:
+                return "not_found"
+            page_number = row[0]
+            target_number = page_number + direction
+            target = connection.execute("""
+                SELECT id FROM wiki_entry_pages
+                WHERE entry_id = ? AND page_number = ?
+            """, (entry_id, target_number)).fetchone()
+            if target is None:
+                return "at_boundary"
+            temporary_number = connection.execute("""
+                SELECT MAX(page_number) + 1
+                FROM wiki_entry_pages WHERE entry_id = ?
+            """, (entry_id,)).fetchone()[0]
+            connection.execute(
+                "UPDATE wiki_entry_pages SET page_number = ? WHERE id = ?",
+                (temporary_number, page_id)
+            )
+            connection.execute(
+                "UPDATE wiki_entry_pages SET page_number = ? WHERE id = ?",
+                (page_number, target[0])
+            )
+            connection.execute(
+                "UPDATE wiki_entry_pages SET page_number = ? WHERE id = ?",
+                (target_number, page_id)
+            )
+            _sync_entry_page_one(connection, entry_id)
+            return "success"
+    finally:
+        connection.close()
+
+
 def migrate_database():
     """Apply incremental database schema updates safely."""
     connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.cursor()
 
-    # --------------------------------------------------
-    # Add image_url to wiki_entries if it does not exist
-    # --------------------------------------------------
+            cursor.execute("PRAGMA table_info(wiki_entries)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "image_url" not in columns:
+                cursor.execute("""
+                    ALTER TABLE wiki_entries
+                    ADD COLUMN image_url TEXT
+                """)
 
-    cursor.execute("""
-        PRAGMA table_info(wiki_entries)
-    """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    description TEXT,
+                    icon TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0
+                )
+            """)
 
-    columns = {
-        row[1]
-        for row in cursor.fetchall()
-    }
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS wiki_entry_pages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    entry_id TEXT NOT NULL,
+                    page_number INTEGER NOT NULL CHECK (page_number >= 1),
+                    content TEXT NOT NULL,
+                    FOREIGN KEY (entry_id)
+                        REFERENCES wiki_entries(id)
+                        ON DELETE CASCADE,
+                    UNIQUE(entry_id, page_number)
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO wiki_entry_pages (entry_id, page_number, content)
+                SELECT id, 1, content
+                FROM wiki_entries
+                WHERE TRUE
+                ON CONFLICT(entry_id, page_number)
+                DO UPDATE SET content = excluded.content
+            """)
+    finally:
+        connection.close()
 
-    if "image_url" not in columns:
-        cursor.execute("""
-            ALTER TABLE wiki_entries
-            ADD COLUMN image_url TEXT
-        """)
-
-    # --------------------------------------------------
-    # Create category registry
-    # --------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS wiki_categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-            description TEXT,
-            icon TEXT,
-            sort_order INTEGER NOT NULL DEFAULT 0
-        )
-    """)
-
-    connection.commit()
-    connection.close()
 
 def initialize_seed_content():
     """Seed categories and starter entries once, only for a new database."""
@@ -309,6 +559,7 @@ def initialize_seed_content():
 
     connection = sqlite3.connect(DATABASE)
     try:
+        connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
@@ -326,6 +577,11 @@ def initialize_seed_content():
                 INSERT OR IGNORE INTO wiki_entries
                 (id, title, category, content, tags) VALUES (?, ?, ?, ?, ?)
             """, entries)
+            connection.execute("""
+                INSERT OR IGNORE INTO wiki_entry_pages
+                (entry_id, page_number, content)
+                SELECT id, 1, content FROM wiki_entries
+            """)
             connection.execute(
                 "UPDATE wiki_bootstrap SET state = 'complete' WHERE id = 1"
             )
@@ -491,6 +747,7 @@ def update_entry(
     """
     connection = sqlite3.connect(DATABASE)
     try:
+        connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("""
@@ -517,28 +774,34 @@ def update_entry(
                 image_url,
                 entry_id
             ))
-            return "success" if cursor.rowcount else "not_found"
+            if not cursor.rowcount:
+                return "not_found"
+            connection.execute("""
+                INSERT INTO wiki_entry_pages (entry_id, page_number, content)
+                VALUES (?, 1, ?)
+                ON CONFLICT(entry_id, page_number)
+                DO UPDATE SET content = excluded.content
+            """, (entry_id, content))
+            return "success"
     finally:
         connection.close()
 
 
 def delete_entry(entry_id):
-    """Delete a wiki entry."""
+    """Delete an entry and cascade its pages and relationships."""
 
     connection = sqlite3.connect(DATABASE)
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        DELETE FROM wiki_entries
-        WHERE id = ?
-    """, (entry_id,))
-
-    deleted = cursor.rowcount > 0
-
-    connection.commit()
-    connection.close()
-
-    return deleted
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute("""
+                DELETE FROM wiki_entries
+                WHERE id = ?
+            """, (entry_id,))
+            return cursor.rowcount > 0
+    finally:
+        connection.close()
 
 
 # --------------------------------------------------

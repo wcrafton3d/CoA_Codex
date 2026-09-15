@@ -145,6 +145,25 @@ image_url   TEXT
 Stores links/relationships among Codex entries. Preserve existing
 relationship data during migrations.
 
+### wiki_entry_pages
+
+Phase 4A adds this ordered page store locally; it is not deployed yet:
+
+``` sql
+CREATE TABLE IF NOT EXISTS wiki_entry_pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL CHECK (page_number >= 1),
+    content TEXT NOT NULL,
+    FOREIGN KEY (entry_id) REFERENCES wiki_entries(id) ON DELETE CASCADE,
+    UNIQUE(entry_id, page_number)
+)
+```
+
+The numeric ID is stable when a page moves. Page numbers are one-based and
+contiguous within each entry. During the Phase 4 transition,
+`wiki_entries.content` remains a compatibility mirror of page 1.
+
 ### wiki_categories
 
 Authoritative category registry foundation:
@@ -812,7 +831,8 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: PLANNED. No Phase 4 code or schema changes have been made.**
+**Status: IN PROGRESS. Phase 4A is implemented and tested locally; it has not
+been committed, pushed, or deployed.**
 
 ### Objective
 
@@ -859,6 +879,40 @@ legacy oversized value without loss during migration.
 
 **Intended result:** storage and helper behavior support one or more pages while
 all existing entries remain readable and unchanged from a user's perspective.
+
+#### Phase 4A local checkpoint --- 2026-09-14
+
+The read-only production audit found 19 entries, 25 relationships, six
+categories, no orphan relationship endpoints, and no existing page table.
+Content lengths range from 49 to 4,000 characters; no production entry is
+blank, null, or over Discord's modal limit. SQLite integrity passed. Foreign
+key declarations exist on `wiki_relationships`, but enforcement is disabled by
+default on ordinary connections, so entry deletion must enable it explicitly.
+
+The local implementation:
+
+-   creates `wiki_entry_pages` transactionally and backfills every existing
+    content value into page 1 without imposing a database length limit
+-   keeps the existing `wiki_entries.content` value synchronized with page 1
+    so all current Discord reads and tuple shapes remain compatible
+-   makes fresh seeding, entry creation, entry editing, and entry deletion
+    maintain the page invariant atomically
+-   adds ordered page reads/counts plus append, update, delete, and one-position
+    move helpers; mutations use stable page IDs and immediate write locks
+-   refuses deletion of the only page, closes ordering gaps after deletion,
+    preserves stable IDs during moves, and validates new page content at
+    1--4,000 characters
+-   enables foreign keys for entry deletion so both pages and existing
+    relationships cascade in the same transaction
+-   leaves all Discord display, navigation, and management UI unchanged for
+    the Phase 4A checkpoint
+
+Migration against a disposable clone of the local database preserved all 10
+entries exactly, created 10 matching page-1 rows, produced zero mirror
+mismatches, and retained SQLite integrity. The complete local suite now has 45
+tests, including 10 focused Phase 4A tests for legacy oversized content,
+idempotence, seeding, rollback, locking, stable ownership, ordering, mirroring,
+and cascade deletion.
 
 ### Phase 4B --- Entry reading and page navigation
 
@@ -1086,16 +1140,15 @@ As of 2026-09-14:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **roadmap defined; implementation has not
-    started**
+-   Phase 4 multi-page wiki entries: **in progress; Phase 4A is implemented and
+    tested locally, awaiting review before commit or deployment**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected after Phase 3F deployment**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** begin Phase 4A with a read-only repository and
-production-data audit, then present the exact page schema and migration contract
-for review before implementation.
+**Next development action:** review the Phase 4A implementation and migration
+diff before committing, pushing, or deploying it.
 
 ## 27. Maintenance rule
 

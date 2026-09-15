@@ -14,6 +14,10 @@ from types import SimpleNamespace
 
 FUNCTIONS = {
     "initialize_database", "migrate_database", "initialize_seed_content",
+    "_validate_entry_page_content", "_validate_entry_page_id",
+    "_sync_entry_page_one", "get_entry_pages", "get_entry_page",
+    "get_entry_page_count", "add_entry_page", "update_entry_page",
+    "delete_entry_page", "move_entry_page", "get_entry", "delete_entry",
     "get_category", "category_exists", "get_category_entry_count",
     "_validate_category_fields", "create_category", "update_category",
     "delete_category", "get_categories", "get_category_icon",
@@ -38,6 +42,7 @@ class CategoryRegistryTests(unittest.TestCase):
         exec(compile(HELPERS, str(SOURCE), "exec"), self.ns)
         for name in ("initialize_database", "migrate_database", "initialize_seed_content"):
             self.ns[name]()
+        self.sql("DELETE FROM wiki_entry_pages")
         self.sql("DELETE FROM wiki_entries")
 
     def call(self, name, *args, **kwargs):
@@ -46,6 +51,7 @@ class CategoryRegistryTests(unittest.TestCase):
     def sql(self, statement, parameters=()):
         connection = sqlite3.connect(self.database)
         try:
+            connection.execute("PRAGMA foreign_keys = ON")
             with connection:
                 return connection.execute(statement, parameters).fetchall()
         finally:
@@ -56,6 +62,9 @@ class CategoryRegistryTests(unittest.TestCase):
             (id, title, category, content, tags, image_url)
             VALUES (?, 'Title', ?, 'Lore', 'tag', 'https://example.com/image.png')
         """, (entry_id, category))
+        self.sql("""INSERT INTO wiki_entry_pages
+            (entry_id, page_number, content) VALUES (?, 1, 'Lore')
+        """, (entry_id,))
 
     def test_details_empty_and_missing(self):
         row = self.call("get_category", " bEsTiArY ")
