@@ -831,8 +831,9 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phases 4A, 4B, and 4C are complete and deployed; Phase
-4D verification and cleanup is the next checkpoint.**
+**Status: IN PROGRESS. Phases 4A, 4B, and 4C are complete and deployed. The
+Phase 4D Discord lifecycle check passed, and the final cleanup is implemented
+locally for review.**
 
 ### Objective
 
@@ -1088,6 +1089,43 @@ multi-page lifecycle in the Test Server and perform final cleanup.
 Discord, and documented without mixing unrelated category UI work into the
 phase.
 
+#### Phase 4D verification and local cleanup checkpoint --- 2026-09-15 UTC
+
+-   The user confirmed that the controlled Discord lifecycle test passed in
+    Test Server `#general`. The agreed scope covered multi-page reader
+    navigation and the Worldbuilder Add, Edit, Move, and Delete flows,
+    including final-page protection.
+-   The live database contained 20 entries, 24 pages, 25 relationships, and
+    six categories before and after the test. `vampires` is the only current
+    multi-page entry and has five pages. These are legitimate content changes
+    made after the Phase 4C deployment snapshot, which contained 19 entries
+    and 19 pages; the Phase 4D test left no temporary entry behind.
+-   Before the live test, SQLite's backup API created
+    `/home/ubuntu/CoA_Codex/wiki-before-phase4d-live-test-20260915-174900.db`.
+    The backup passed integrity checking and contains the same 20 entries, 24
+    pages, 25 relationships, and six categories.
+-   All 63 deployed tests passed on OCI before the live test. Afterward,
+    production still had zero missing or mismatched page-1 mirrors, SQLite
+    reported `integrity_check = ok`, the foreign-key check was empty, and
+    `coa-codex.service` remained active.
+-   The cleanup changes content search to inspect every row in
+    `wiki_entry_pages`, so terms appearing only on later pages are searchable.
+    It preserves the existing five-column result tuple and returns each entry
+    once even when several pages match.
+-   Create-entry and edit-entry modals now label their initial content field
+    **Page 1 Content**, clarifying its relationship to the separate page
+    manager.
+-   `wiki_entries.content` remains intentionally as the synchronized page-1
+    compatibility mirror. Existing tuple contracts and entry metadata editing
+    still depend on it, so removing it is outside this cleanup.
+-   One focused search regression test raises the complete local suite to 64
+    passing tests. Source compilation and diff whitespace checks also pass.
+-   The cleanup is local and uncommitted. The local bot remains stopped and
+    OCI remains the live bot at the deployed Phase 4C commit.
+
+Phase 4D needs review, commit, push, deployment, and post-restart verification
+before Phase 4 can be marked complete.
+
 ## 17. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
@@ -1201,10 +1239,9 @@ This lets Worldbuilders expand the Codex without developer intervention.
 
 For entry content:
 
-**Current:** one `wiki_entries.content` value → one entry embed
-
-**Phase 4 target:** one wiki entry → ordered content pages → Discord page
-navigation and Worldbuilder page management
+**Current Phase 4 architecture:** one wiki entry → ordered content pages →
+Discord page navigation and Worldbuilder page management. The legacy
+`wiki_entries.content` column mirrors page 1 for compatibility.
 
 Potential future categories discussed as examples include Deities,
 Items, Magic, and History. Do not seed them unless requested.
@@ -1274,16 +1311,17 @@ As of 2026-09-15 UTC:
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
 -   Phase 4 multi-page wiki entries: **in progress; Phases 4A, 4B, and 4C are
-    complete, committed, pushed, deployed, and verified on OCI; all 63 tests
-    pass; controlled live Discord lifecycle testing remains for Phase 4D**
+    complete and deployed; the Phase 4D Discord lifecycle test passed; final
+    search/modal cleanup is local and all 64 tests pass**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected after Phase 4C deployment**.
+-   Local bot: **stopped**; OCI: **active with verified database integrity after
+    the Phase 4D live test**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** begin Phase 4D verification and cleanup, including
-a controlled Test Server multi-page lifecycle check and final review of obsolete
-single-page assumptions.
+**Next development action:** review the Phase 4D cleanup, then commit, push,
+deploy, and perform the final post-restart checks before marking Phase 4
+complete.
 
 ## 27. Maintenance rule
 

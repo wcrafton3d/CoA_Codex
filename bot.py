@@ -690,29 +690,36 @@ def search_wiki(query: str, limit: int = 25):
 
     cursor.execute("""
         SELECT
-            id,
-            title,
-            category,
-            content,
-            tags
-        FROM wiki_entries
+            e.id,
+            e.title,
+            e.category,
+            e.content,
+            e.tags
+        FROM wiki_entries AS e
         WHERE
-            id LIKE ?
-            OR title LIKE ?
-            OR category LIKE ?
-            OR tags LIKE ?
-            OR content LIKE ?
+            e.id LIKE ?
+            OR e.title LIKE ?
+            OR e.category LIKE ?
+            OR e.tags LIKE ?
+            OR e.content LIKE ?
+            OR EXISTS (
+                SELECT 1
+                FROM wiki_entry_pages AS p
+                WHERE p.entry_id = e.id
+                    AND p.content LIKE ?
+            )
         ORDER BY
             CASE
-                WHEN id = ? THEN 0
-                WHEN title = ? THEN 1
-                WHEN title LIKE ? THEN 2
-                WHEN id LIKE ? THEN 3
+                WHEN e.id = ? THEN 0
+                WHEN e.title = ? THEN 1
+                WHEN e.title LIKE ? THEN 2
+                WHEN e.id LIKE ? THEN 3
                 ELSE 4
             END,
-            title COLLATE NOCASE
+            e.title COLLATE NOCASE
         LIMIT ?
     """, (
+        search_term,
         search_term,
         search_term,
         search_term,
@@ -3925,7 +3932,7 @@ class WikiAddModal(discord.ui.Modal):
         )
 
         self.content = discord.ui.TextInput(
-            label="Content",
+            label="Page 1 Content",
             placeholder="Enter the wiki entry...",
             style=discord.TextStyle.paragraph,
             required=True,
@@ -4041,7 +4048,7 @@ class WikiEditModal(discord.ui.Modal):
         )
 
         self.content = discord.ui.TextInput(
-            label="Content",
+            label="Page 1 Content",
             default=content,
             style=discord.TextStyle.paragraph,
             required=True,

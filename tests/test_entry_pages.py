@@ -231,6 +231,17 @@ class EntryPageTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.call("update_entry_page", "entry", page_id, "Lore")
 
+    def test_search_finds_all_pages_without_duplicate_entries(self):
+        self.add_entry("multi", "First-page marker")
+        self.call("add_entry_page", "multi", "Second-page unique marker")
+        self.call("add_entry_page", "multi", "Another unique marker")
+
+        results = self.call("search_wiki", "unique marker")
+
+        self.assertEqual(results, [
+            ("multi", "Entry", "World", "First-page marker", ""),
+        ])
+
     def test_delete_page_compacts_order_and_mirrors_new_page_one(self):
         self.add_entry(content="One")
         self.call("add_entry_page", "entry", "Two")

@@ -22,6 +22,7 @@ FUNCTIONS = {
     "_validate_category_fields", "create_category", "update_category",
     "delete_category", "get_categories", "get_category_icon",
     "get_category_entries", "add_entry", "update_entry",
+    "search_wiki",
 }
 SOURCE = Path(__file__).resolve().parents[1] / "bot.py"
 TREE = ast.parse(SOURCE.read_text(encoding="utf-8"))
