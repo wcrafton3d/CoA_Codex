@@ -831,9 +831,9 @@ pass locally.
 
 ## 16. Phase 4 --- Multi-page wiki entries
 
-**Status: IN PROGRESS. Phases 4A, 4B, and 4C are complete and deployed. The
-Phase 4D Discord lifecycle check passed, and the final cleanup is implemented
-locally for review.**
+**Status: COMPLETE and deployed on 2026-09-15. The Phase 4D Discord lifecycle
+check passed, the final cleanup is deployed, and all 64 tests pass locally and
+on OCI.**
 
 ### Objective
 
@@ -1123,8 +1123,31 @@ phase.
 -   The cleanup is local and uncommitted. The local bot remains stopped and
     OCI remains the live bot at the deployed Phase 4C commit.
 
-Phase 4D needs review, commit, push, deployment, and post-restart verification
-before Phase 4 can be marked complete.
+At this local checkpoint, Phase 4D still needed review, commit, push,
+deployment, and post-restart verification before Phase 4 could be marked
+complete.
+
+#### Phase 4D deployment checkpoint --- 2026-09-15 UTC
+
+-   The reviewed Phase 4D cleanup, regression test, and local checkpoint were
+    committed as `ddceb43`, pushed to `main`, and deployed to OCI through the
+    verified Git bundle workflow.
+-   The deployed source compiled successfully and all 64 tests passed on OCI
+    before restart.
+-   `coa-codex.service` restarted successfully at 18:09:38 UTC with PID
+    368698, logged in with the Discord token, and connected to the gateway at
+    18:09:39 UTC.
+-   Post-restart production remained at 20 entries, 24 pages, 25
+    relationships, and six categories, with zero page-1 mirror mismatches.
+    SQLite reports `integrity_check = ok` and an empty foreign-key check.
+-   The verified Phase 4D backup remains at
+    `/home/ubuntu/CoA_Codex/wiki-before-phase4d-live-test-20260915-174900.db`.
+-   The local bot remained stopped throughout deployment. The ignored
+    `assets/` directory was not committed, transferred, or deployed.
+
+Phase 4 is complete. Long entries now have ordered storage, reader navigation,
+Worldbuilder page management, full-page content search, tested rollback and
+permission behavior, and a verified production lifecycle.
 
 ## 17. Navigation considerations
 
@@ -1310,18 +1333,17 @@ As of 2026-09-15 UTC:
     pushed, deployed, and verified in Discord; 35 tests pass locally and on OCI**
 -   Phase 3F cleanup: **complete; committed, pushed, deployed, and verified;
     all 35 tests pass locally and on OCI**
--   Phase 4 multi-page wiki entries: **in progress; Phases 4A, 4B, and 4C are
-    complete and deployed; the Phase 4D Discord lifecycle test passed; final
-    search/modal cleanup is local and all 64 tests pass**
+-   Phase 4 multi-page wiki entries: **complete, committed, pushed, deployed,
+    and production-verified; the Discord lifecycle test passed and all 64
+    tests pass locally and on OCI**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active with verified database integrity after
-    the Phase 4D live test**.
+-   Local bot: **stopped**; OCI: **active and connected on the Phase 4D
+    deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the Phase 4D cleanup, then commit, push,
-deploy, and perform the final post-restart checks before marking Phase 4
-complete.
+**Next development action:** review and define the next roadmap phase before
+starting new implementation work.
 
 ## 27. Maintenance rule
 
