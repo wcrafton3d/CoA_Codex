@@ -16,6 +16,12 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 
 DATABASE = "wiki.db"
 
+HOME_BANNER_URL = (
+    "https://raw.githubusercontent.com/"
+    "wcrafton3d/CoA_Codex/main/"
+    "static/coa-codex-home-banner.webp"
+)
+
 
 # --------------------------------------------------
 # Discord Servers
@@ -1636,18 +1642,15 @@ class CodexHomeView(discord.ui.View):
 # Display Codex Home
 # --------------------------------------------------
 
-async def display_codex_home(
-    interaction: discord.Interaction,
-    edit=False,
-    history=None
-):
+def build_codex_home_embeds(categories):
+    """Build the banner and home-content embeds in display order."""
 
-    if history is None:
-        history = []
+    banner_embed = discord.Embed()
+    banner_embed.set_image(
+        url=HOME_BANNER_URL
+    )
 
-    categories = get_categories()
-
-    embed = discord.Embed(
+    home_embed = discord.Embed(
         title="📖 The CoA Codex",
         description=(
             "Welcome to the Codex.\n\n"
@@ -1672,7 +1675,7 @@ async def display_codex_home(
                 f"{icon} **{category}**"
             )
 
-        embed.add_field(
+        home_embed.add_field(
             name="📚 Categories",
             value="\n".join(
                 category_lines
@@ -1680,7 +1683,7 @@ async def display_codex_home(
             inline=False
         )
 
-    embed.add_field(
+    home_embed.add_field(
         name="🔎 Getting Started",
         value=(
             "Use `/wiki` to search for a specific "
@@ -1690,7 +1693,7 @@ async def display_codex_home(
         inline=False
     )
 
-    embed.add_field(
+    home_embed.add_field(
         name="🏷️ Tags",
         value=(
             "Explore the Codex by subjects, themes, "
@@ -1699,8 +1702,28 @@ async def display_codex_home(
         inline=False
     )
 
-    embed.set_footer(
+    home_embed.set_footer(
         text=f"Total categories: {len(categories)}"
+    )
+
+    return [
+        banner_embed,
+        home_embed
+    ]
+
+
+async def display_codex_home(
+    interaction: discord.Interaction,
+    edit=False,
+    history=None
+):
+
+    if history is None:
+        history = []
+
+    categories = get_categories()
+    embeds = build_codex_home_embeds(
+        categories
     )
 
     view = CodexHomeView(
@@ -1712,21 +1735,21 @@ async def display_codex_home(
         if interaction.response.is_done():
 
             await interaction.edit_original_response(
-                embed=embed,
+                embeds=embeds,
                 view=view
             )
 
         else:
 
             await interaction.response.edit_message(
-                embed=embed,
+                embeds=embeds,
                 view=view
             )
 
     else:
 
         await interaction.response.send_message(
-            embed=embed,
+            embeds=embeds,
             view=view
         )
 

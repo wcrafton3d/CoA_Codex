@@ -1149,6 +1149,32 @@ Phase 4 is complete. Long entries now have ordered storage, reader navigation,
 Worldbuilder page management, full-page content search, tested rollback and
 permission behavior, and a verified production lifecycle.
 
+#### Post-Phase 4 home-banner local checkpoint --- 2026-10-02
+
+The animated Codex home banner is implemented locally for review:
+
+-   `static/coa-codex-home-banner.webp` is a tracked production UI asset. It
+    is a 1.66 MB animated WebP with 80 frames at 1200 × 300 pixels.
+-   `HOME_BANNER_URL` points to the asset's public raw GitHub `main` URL. The
+    finished file must be pushed before Discord can retrieve it.
+-   `build_codex_home_embeds()` returns a banner-only embed followed by the
+    existing Codex home-content embed.
+-   New `/wiki-home` responses and every Home navigation path send both embeds
+    in one message. Category, entry, search, and tag views retain their existing
+    single-embed rendering, so the banner appears only on the home page.
+-   The existing buttons remain attached to the same message beneath the home
+    content embed. Category order, home history, and owner-bound navigation are
+    unchanged.
+-   Two focused tests cover initial two-embed ordering and restoration through
+    both interaction-edit paths. The full local suite now contains 66 passing
+    tests; source compilation, Python 3.10 grammar parsing, and diff whitespace
+    checks pass.
+-   The unrelated untracked `tools/` directory is outside this change. The
+    local bot was not started and production was not changed.
+
+This enhancement needs review, commit, push, deployment, and a visual Discord
+check confirming that the animated banner loads above the existing home panel.
+
 ## 17. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
@@ -1336,14 +1362,17 @@ As of 2026-09-15 UTC:
 -   Phase 4 multi-page wiki entries: **complete, committed, pushed, deployed,
     and production-verified; the Discord lifecycle test passed and all 64
     tests pass locally and on OCI**
+-   Animated home banner: **implemented locally for review; two focused tests
+    bring the local suite to 66 passing tests; not yet committed or deployed**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected on the Phase 4D
     deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review and define the next roadmap phase before
-starting new implementation work.
+**Next development action:** review the animated home-banner enhancement, then
+commit, push, deploy, and perform a visual `/wiki-home` check before defining
+the next roadmap phase.
 
 ## 27. Maintenance rule
 
