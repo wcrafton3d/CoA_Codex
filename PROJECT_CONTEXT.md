@@ -1175,6 +1175,32 @@ The animated Codex home banner is implemented locally for review:
 This enhancement needs review, commit, push, deployment, and a visual Discord
 check confirming that the animated banner loads above the existing home panel.
 
+#### Post-Phase 4 home-banner deployment checkpoint --- 2026-10-02
+
+-   The reviewed home-banner implementation, asset, focused tests, and local
+    checkpoint were committed as `4d295e9` and pushed to `main`. The unrelated
+    `tools/` directory remained untracked and outside the commit.
+-   The GitHub repository was made public before deployment. The configured raw
+    banner URL returned `200 OK`, `Content-Type: image/webp`, and the expected
+    1,663,470-byte file.
+-   OCI fast-forwarded from `75c5d98` to `4d295e9` through the verified Git
+    bundle workflow. The deployed source compiled successfully and all 66 tests
+    passed before restart.
+-   `coa-codex.service` restarted successfully at 7:02:27 PM EDT
+    (23:02:27 UTC) with PID 565757, logged in with the Discord token, and
+    connected to the gateway at 7:02:29 PM EDT.
+-   Post-restart production contains 35 entries, 48 pages, 62 relationships,
+    and six categories. There are zero page-1 mirror mismatches; SQLite reports
+    `integrity_check = ok` and an empty foreign-key check. The increased counts
+    are live content growth since the Phase 4 checkpoint, not deployment
+    writes.
+-   This visual-only deployment did not change schema or database write paths,
+    so no new database backup was required. The local bot remained stopped.
+
+Deployment is complete. A visual `/wiki-home` check remains to confirm that
+Discord renders the animated banner above the title, categories, and controls,
+and that navigating away removes it while Home restores it.
+
 ## 17. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
@@ -1337,7 +1363,7 @@ behavior.
 
 ## 26. Immediate handoff summary
 
-As of 2026-09-15 UTC:
+As of 2026-10-02:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
@@ -1362,17 +1388,17 @@ As of 2026-09-15 UTC:
 -   Phase 4 multi-page wiki entries: **complete, committed, pushed, deployed,
     and production-verified; the Discord lifecycle test passed and all 64
     tests pass locally and on OCI**
--   Animated home banner: **implemented locally for review; two focused tests
-    bring the local suite to 66 passing tests; not yet committed or deployed**
+-   Animated home banner: **committed as `4d295e9`, pushed, deployed, and
+    connected on OCI; all 66 tests pass locally and on OCI; final visual
+    `/wiki-home` verification remains**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected on the Phase 4D
-    deployment with verified database integrity**.
+-   Local bot: **stopped**; OCI: **active and connected on the animated
+    home-banner deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review the animated home-banner enhancement, then
-commit, push, deploy, and perform a visual `/wiki-home` check before defining
-the next roadmap phase.
+**Next development action:** perform the visual `/wiki-home` banner and
+navigation check, record acceptance, and then define the next roadmap phase.
 
 ## 27. Maintenance rule
 
