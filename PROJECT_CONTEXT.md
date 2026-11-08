@@ -1213,6 +1213,20 @@ category UI suite and all 66 offline tests pass with local Python 3.10.6 and
 discord.py 2.7.1. This change is local and uncommitted; no live bot was started
 and no production data was changed.
 
+#### Entry edit category picker deployment --- 2026-11-07 EST
+
+The approved fix was committed as `bee2eaa`, pushed to `main`, and deployed
+to OCI by verified Git bundle and fast-forward merge. The `.agents/`, `tmp/`,
+and `tools/` directories were excluded. The deployed source compiled and all
+66 tests passed before restart. `coa-codex.service` restarted at 7:14:29 PM
+EST (2026-11-08 00:14:29 UTC) with PID 964395 and connected to Discord at
+7:14:31 PM EST. The production database had 69 entries, 83 pages, 68
+relationships, and six categories at this checkpoint. Integrity passed, the
+foreign-key check was empty, and there were zero page-1 mirror mismatches or
+unregistered entry categories. No backup was needed because this release
+changes no schema or database write path. A live Discord check of the new
+button remains pending.
+
 ## 17. Navigation considerations
 
 The Codex uses state/history navigation helpers for home, category,
@@ -1409,9 +1423,9 @@ As of 2026-10-02:
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** review and deploy the entry edit picker fix, then
-verify that **Keep Current Category** opens the edit modal in Discord without
-changing the entry's category.
+**Next development action:** verify in Discord that **Keep Current Category**
+opens the edit modal without changing the entry's category, then record the
+visual result.
 
 ## 27. Maintenance rule
 
