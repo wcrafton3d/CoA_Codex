@@ -4185,12 +4185,21 @@ class EntryCategorySelectView(discord.ui.View):
         select.callback = self.select_category
         self.add_item(select)
 
+        if self.mode == "edit" and self.current_category is not None:
+            keep_button = discord.ui.Button(
+                label="Keep Current Category",
+                style=discord.ButtonStyle.primary,
+                row=1
+            )
+            keep_button.callback = self.keep_current_category
+            self.add_item(keep_button)
+
         if self.page_count > 1:
             previous_button = discord.ui.Button(
                 label="Previous Categories",
                 emoji="◀️",
                 style=discord.ButtonStyle.secondary,
-                row=1,
+                row=1 if self.mode == "add" else 2,
                 disabled=self.page == 0
             )
             previous_button.callback = self.previous_page
@@ -4200,7 +4209,7 @@ class EntryCategorySelectView(discord.ui.View):
                 label="Next Categories",
                 emoji="▶️",
                 style=discord.ButtonStyle.secondary,
-                row=1,
+                row=1 if self.mode == "add" else 2,
                 disabled=self.page >= self.page_count - 1
             )
             next_button.callback = self.next_page
@@ -4277,6 +4286,31 @@ class EntryCategorySelectView(discord.ui.View):
 
         await interaction.response.send_modal(
             WikiEditModal(entry, category)
+        )
+
+    async def keep_current_category(
+        self,
+        interaction: discord.Interaction
+    ):
+        details = get_category(self.current_category)
+        if details is None:
+            await interaction.response.send_message(
+                "❌ The current category no longer exists. Reopen the entry "
+                "editor and choose another category.",
+                ephemeral=True
+            )
+            return
+
+        entry = get_entry(self.entry_id)
+        if entry is None:
+            await interaction.response.send_message(
+                "❌ That wiki entry could not be found.",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_modal(
+            WikiEditModal(entry, details[1])
         )
 
 

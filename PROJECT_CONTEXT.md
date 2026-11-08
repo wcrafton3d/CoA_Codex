@@ -1,6 +1,6 @@
 # CoA Codex --- Project Context
 
-**Last updated:** 2026-09-14\
+**Last updated:** 2026-11-07\
 **Repository:** `https://github.com/wcrafton3d/CoA_Codex.git`\
 **Application:** Discord fantasy-world Codex/wiki bot\
 **Stack:** Python, discord.py, SQLite
@@ -1197,9 +1197,21 @@ check confirming that the animated banner loads above the existing home panel.
 -   This visual-only deployment did not change schema or database write paths,
     so no new database backup was required. The local bot remained stopped.
 
-Deployment is complete. A visual `/wiki-home` check remains to confirm that
-Discord renders the animated banner above the title, categories, and controls,
-and that navigating away removes it while Home restores it.
+Deployment is complete. On 2026-11-07, the user reported satisfaction with
+the banner's appearance. This confirms visual acceptance of the banner; the
+category/tag departure and Home return sequence was not separately reported.
+
+#### Entry edit category picker local checkpoint --- 2026-11-07
+
+The edit-category picker already marks the entry's current category as the
+default option. Discord does not submit a select interaction when an already
+selected option is chosen again. A dedicated **Keep Current Category** button
+now opens the edit modal with the registered current category. The callback
+reloads the category and entry, so deleted or renamed state is not silently
+accepted. The create-entry picker retains its existing controls. The focused
+category UI suite and all 66 offline tests pass with local Python 3.10.6 and
+discord.py 2.7.1. This change is local and uncommitted; no live bot was started
+and no production data was changed.
 
 ## 17. Navigation considerations
 
@@ -1390,15 +1402,16 @@ As of 2026-10-02:
     tests pass locally and on OCI**
 -   Animated home banner: **committed as `4d295e9`, pushed, deployed, and
     connected on OCI; all 66 tests pass locally and on OCI; final visual
-    `/wiki-home` verification remains**
+    `/wiki-home` banner appearance was accepted by the user on 2026-11-07**
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected on the animated
     home-banner deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** perform the visual `/wiki-home` banner and
-navigation check, record acceptance, and then define the next roadmap phase.
+**Next development action:** review and deploy the entry edit picker fix, then
+verify that **Keep Current Category** opens the edit modal in Discord without
+changing the entry's category.
 
 ## 27. Maintenance rule
 
@@ -1414,3 +1427,23 @@ Update this file whenever:
 
 Keep it readable at session start but detailed enough that a new
 development agent does not need to guess at architectural intent.
+
+## 28. Reusable project Skills --- 2026-10-05
+
+Four repository-scoped Skills are available under `.agents/skills/`, with
+invocation metadata in each Skill's `agents/openai.yaml`:
+
+- `$coa-developer`: implement focused application changes while preserving
+  category, page, permission, navigation, and database contracts.
+- `$coa-test-review`: review changes and run isolated offline verification;
+  distinguish automated evidence from pending live Discord checks.
+- `$coa-deployment`: prepare and execute authorized releases to the existing
+  OCI service, using consistent backups when appropriate, verified revisions,
+  and the established Git-bundle deployment workflow.
+- `$coa-context-keeper`: reconcile this document with source and verified
+  checkpoint evidence, preserving historical versus current status.
+
+Each Skill reads this document and current project state before acting.
+Automatic selection remains enabled by default. These are project workflow
+instructions; creating them did not change application code, deploy a release,
+or start either bot. The banner appearance was later accepted on 2026-11-07.

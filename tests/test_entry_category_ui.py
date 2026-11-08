@@ -129,6 +129,12 @@ class EntryCategoryUiTests(unittest.IsolatedAsyncioTestCase):
             "World", "NPC", "Bestiary"
         ])
         self.assertTrue(options[0].default)
+        keep = next(child for child in picker.children
+                    if getattr(child, "label", None) == "Keep Current Category")
+        kept = interaction()
+        await keep.callback(kept)
+        kept_modal = kept.response.send_modal.call_args.args[0]
+        self.assertEqual(kept_modal.category_value, "World")
         self.assertTrue(i.response.send_message.call_args.kwargs["ephemeral"])
 
         outsider = interaction(user_id=8)
