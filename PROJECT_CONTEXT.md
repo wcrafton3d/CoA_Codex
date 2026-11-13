@@ -1421,15 +1421,19 @@ As of 2026-11-13:
     map picker, and navigation; committed as `0ce3e23`, pushed, and deployed;
     72 offline tests pass locally and on OCI; live visual check pending**.
     See Section 29.
+-   Corunum map renumbering: **revised locally on 2026-11-13 to match the
+    updated 1–24 key and overlay; accepted by the user, committed as
+    `85446cd`, pushed, and deployed; live visual check pending**.
+    See Section 30.
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
 -   Local bot: **stopped**; OCI: **active and connected on the Corunum map
     deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** verify `/wiki-map`, the home Map button, entry
-selection, missing-entry messages, and Back/Home navigation in the Discord
-Test Server, then record the visual result.
+**Next development action:** visually verify the revised `/wiki-map` image,
+pin numbering and legibility, entry selection, and Back/Home navigation in
+the Discord Test Server.
 
 ## 27. Maintenance rule
 
@@ -1512,3 +1516,45 @@ starting a live bot.
 -   Live Discord visual verification remains pending. Check image loading,
     pin legibility at normal view and zoom, the 24-option picker, an existing
     entry, a missing entry, and Back/Home behavior in the Test Server.
+
+## 30. Corunum map renumbering --- local checkpoint, 2026-11-13
+
+The user replaced the ignored `locations-key.txt` and
+`corunum-base-map-v3_overlay.png` with a complete 1–24 numbering scheme.
+`static/corunum-map-locations.json` now matches the new names, sequence,
+and measured dot centers. A new `static/corunum-map-pinned-v2.jpg` uses the
+same approved 2508 × 2508 artwork, with all 24 pins at twice the overlay
+coordinates and larger, heavier numerals. The map URL points to the new
+filename so Discord does not reuse the earlier cached map. The old runtime
+JPEG remains tracked for now.
+
+The user reports that the existing Codex entry has been retitled from
+**Kingdom Adlucem** to **Adlucem**. Pin 1 therefore uses `Adlucem` directly,
+without a title alias. No database rows were changed locally for this map
+update. The earlier map deployment in Section 29 remains historical truth.
+Local Python 3.10 compilation, all 73 offline tests, and `git diff --check`
+passed. An image check confirmed 24 key-to-manifest name matches, all 24
+centers on their overlay dots, and the 1254 → 2508 size relationship.
+The user then moved dot 4 in the overlay to keep the Burkaburr landmark
+visible. Its source center changed from `(467.5, 823.5)` to
+`(489.5, 815.5)`; the manifest and then-local pinned v2 JPEG were rebuilt
+from the same approved artwork. No other location or bot behavior changed.
+
+### Revised map deployment checkpoint --- 2026-11-13
+
+-   The user visually accepted the revised local map and authorized release.
+    The 1–24 manifest, bolder pinned image, map URL change, and updated tests
+    were committed as `85446cd` and pushed to `main`. The public v2 JPEG
+    returned `200`, `Content-Type: image/jpeg`, and 2,181,564 bytes.
+-   OCI was at prior HEAD `411a223` with no tracked changes. A verified Git
+    bundle fast-forwarded it to `85446cd`. OCI Python 3.12.3 compiled the bot
+    and passed all 73 offline tests before restart.
+-   `coa-codex.service` restarted at 16:37:13 UTC (11:37:13 AM EST), remained
+    active with PID 1016941, and connected to the Discord gateway at
+    16:37:14 UTC. Exact deployed HEAD `85446cd` was verified.
+-   Production counts remained 70 entries, 84 pages, six categories, and
+    68 relationships. `integrity_check` returned `ok`; `foreign_key_check`
+    returned no rows. The production entry title `Adlucem` was verified in
+    the Location category. This update changes no schema or database write
+    path, so no new SQLite backup was created.
+-   Discord visual verification of the deployed revised map remains pending.
