@@ -53,6 +53,7 @@ class HomeBannerTests(unittest.IsolatedAsyncioTestCase):
             "make_home_state": Mock(return_value=("home",)),
             "display_category": AsyncMock(),
             "display_tag_browser": AsyncMock(),
+            "display_wiki_map": AsyncMock(),
         }
         exec(compile(MODULE, str(SOURCE), "exec"), self.ns)
 
@@ -89,6 +90,15 @@ class HomeBannerTests(unittest.IsolatedAsyncioTestCase):
         call = deferred.edit_original_response.call_args
         self.assert_home_embeds(call.kwargs["embeds"])
 
+    async def test_home_map_button_opens_map_with_back_history(self):
+        view = self.ns["CodexHomeView"](author_id=7)
+        button = next(item for item in view.children
+                      if getattr(item, "label", None) == "Corunum Map")
+        i = interaction()
+        await button.callback(i)
+        self.ns["display_wiki_map"].assert_awaited_once_with(
+            i, edit=True, history=[self.ns["make_home_state"].return_value]
+        )
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,7 @@
+import json
 import os
 import sqlite3
+from pathlib import Path
 
 import discord
 from discord import app_commands
@@ -20,6 +22,16 @@ HOME_BANNER_URL = (
     "https://raw.githubusercontent.com/"
     "wcrafton3d/CoA_Codex/main/"
     "static/coa-codex-home-banner.webp"
+)
+
+CORUNUM_MAP_URL = (
+    "https://raw.githubusercontent.com/"
+    "wcrafton3d/CoA_Codex/main/"
+    "static/corunum-map-pinned.jpg"
+)
+CORUNUM_MAP_LOCATIONS = json.loads(
+    (Path(__file__).resolve().parent / "static/corunum-map-locations.json")
+    .read_text(encoding="utf-8")
 )
 
 
@@ -1227,6 +1239,12 @@ def make_home_state():
     }
 
 
+def make_map_state():
+    """Create a navigation state representing the Corunum map."""
+
+    return {"type": "map"}
+
+
 def make_category_state(
     category: str,
     page: int = 0
@@ -1616,6 +1634,23 @@ class CodexHomeView(discord.ui.View):
 
         self.add_item(tags_button)
 
+        map_button = discord.ui.Button(
+            label="Corunum Map",
+            emoji="🗺️",
+            style=discord.ButtonStyle.primary,
+            row=3
+        )
+
+        async def map_callback(interaction: discord.Interaction):
+            await display_wiki_map(
+                interaction,
+                edit=True,
+                history=[make_home_state()]
+            )
+
+        map_button.callback = map_callback
+        self.add_item(map_button)
+
     def create_category_callback(
         self,
         category: str
@@ -1752,6 +1787,145 @@ async def display_codex_home(
             embeds=embeds,
             view=view
         )
+
+
+def get_map_entry(title: str):
+    """Find a currently available entry for a mapped location by title."""
+
+    normalized_title = title.strip().replace("’", "'").casefold()
+    connection = sqlite3.connect(DATABASE)
+    try:
+        rows = connection.execute("""
+            SELECT id, title, category, content, tags, image_url
+            FROM wiki_entries
+            WHERE category = 'Location' COLLATE NOCASE
+        """).fetchall()
+    finally:
+        connection.close()
+
+    return next(
+        (
+            row for row in rows
+            if row[1].strip().replace("’", "'").casefold()
+            == normalized_title
+        ),
+        None
+    )
+
+
+class CorunumMapView(discord.ui.View):
+    """Select a numbered map pin and open its matching Codex entry."""
+
+    def __init__(self, author_id: int, history=None):
+        super().__init__(timeout=300)
+        self.author_id = author_id
+        self.history = history or []
+
+        select = discord.ui.Select(
+            placeholder="Choose a numbered location",
+            options=[
+                discord.SelectOption(
+                    label=f"#{location['number']} {location['name']}"[:100],
+                    value=str(location["number"])
+                )
+                for location in CORUNUM_MAP_LOCATIONS
+            ]
+        )
+        select.callback = self.select_location
+        self.location_select = select
+        self.add_item(select)
+
+        if self.history:
+            back = discord.ui.Button(
+                label="Back", emoji="↩️",
+                style=discord.ButtonStyle.primary
+            )
+            back.callback = self.go_back
+            self.add_item(back)
+
+        home = discord.ui.Button(
+            label="Home", emoji="🏠",
+            style=discord.ButtonStyle.success
+        )
+        home.callback = self.go_home
+        self.add_item(home)
+
+    async def check_owner(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "❌ This Codex browser belongs to another user.",
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def select_location(self, interaction: discord.Interaction):
+        if not await self.check_owner(interaction):
+            return
+
+        number = int(self.location_select.values[0])
+        location = next(
+            item for item in CORUNUM_MAP_LOCATIONS
+            if item["number"] == number
+        )
+        entry = get_map_entry(location["name"])
+        if entry is None:
+            await interaction.response.send_message(
+                f"📍 **#{number} {location['name']}** does not have "
+                "a Codex entry yet.",
+                ephemeral=True
+            )
+            return
+
+        await display_wiki_entry(
+            interaction,
+            entry,
+            history=self.history + [make_map_state()]
+        )
+
+    async def go_back(self, interaction: discord.Interaction):
+        if not await self.check_owner(interaction):
+            return
+        if not self.history:
+            await interaction.response.send_message(
+                "❌ There is nowhere to go back to.", ephemeral=True
+            )
+            return
+        await navigate_to_state(
+            interaction, self.history[-1], self.history[:-1]
+        )
+
+    async def go_home(self, interaction: discord.Interaction):
+        if not await self.check_owner(interaction):
+            return
+        await display_codex_home(interaction, edit=True)
+
+
+async def display_wiki_map(
+    interaction: discord.Interaction, edit=False, history=None
+):
+    """Show the pinned map with a picker for all documented locations."""
+
+    embed = discord.Embed(
+        title="🗺️ Map of Corunum",
+        description=(
+            "Select a numbered pin below to open its Codex entry. "
+            "Locations without entries remain visible on the map. "
+            "Open the image to zoom in."
+        ),
+        color=discord.Color.gold()
+    )
+    embed.set_image(url=CORUNUM_MAP_URL)
+    embed.set_footer(text=f"{len(CORUNUM_MAP_LOCATIONS)} mapped locations")
+    view = CorunumMapView(interaction.user.id, history=history)
+
+    if edit:
+        if interaction.response.is_done():
+            await interaction.edit_original_response(embed=embed, view=view)
+        else:
+            await interaction.response.edit_message(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(embed=embed, view=view)
 
 # --------------------------------------------------
 # Category Browser View
@@ -3279,6 +3453,14 @@ async def navigate_to_state(
 
         return
 
+    if state_type == "map":
+        await display_wiki_map(
+            interaction,
+            edit=True,
+            history=history
+        )
+        return
+
     # --------------------------------------------------
     # Category
     # --------------------------------------------------
@@ -3627,6 +3809,14 @@ async def wiki_home(
     await display_codex_home(
         interaction
     )
+
+
+@bot.tree.command(
+    name="wiki-map",
+    description="Browse the numbered locations on the map of Corunum."
+)
+async def wiki_map(interaction: discord.Interaction):
+    await display_wiki_map(interaction)
 
 # --------------------------------------------------
 # /wiki-link
