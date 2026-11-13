@@ -27,7 +27,7 @@ HOME_BANNER_URL = (
 CORUNUM_MAP_URL = (
     "https://raw.githubusercontent.com/"
     "wcrafton3d/CoA_Codex/main/"
-    "static/corunum-map-pinned.jpg"
+    "static/corunum-map-pinned-v2.jpg"
 )
 CORUNUM_MAP_LOCATIONS = json.loads(
     (Path(__file__).resolve().parent / "static/corunum-map-locations.json")

@@ -58,9 +58,10 @@ class CorunumMapTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_all_documented_pins_have_unique_picker_options(self):
         self.assertEqual(len(LOCATIONS), 24)
-        self.assertEqual(len({item["number"] for item in LOCATIONS}), 24)
-        self.assertNotIn(1, {item["number"] for item in LOCATIONS})
-        self.assertNotIn(11, {item["number"] for item in LOCATIONS})
+        self.assertEqual(
+            [item["number"] for item in LOCATIONS], list(range(1, 25))
+        )
+        self.assertEqual(LOCATIONS[0]["name"], "Adlucem")
         i = interaction()
         await self.ns["display_wiki_map"](i)
         call = i.response.send_message.call_args
@@ -72,7 +73,7 @@ class CorunumMapTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_entry_leaves_map_open(self):
         i = interaction()
         view = self.ns["CorunumMapView"](7)
-        view.location_select._values = ["9"]
+        view.location_select._values = ["13"]
         await view.select_location(i)
         i.response.send_message.assert_awaited_once()
         self.assertIn("Heurr", i.response.send_message.call_args.args[0])
@@ -84,16 +85,24 @@ class CorunumMapTests(unittest.IsolatedAsyncioTestCase):
         self.ns["get_map_entry"].return_value = entry
         i = interaction()
         view = self.ns["CorunumMapView"](7, history=[{"type": "home"}])
-        view.location_select._values = ["9"]
+        view.location_select._values = ["13"]
         await view.select_location(i)
         self.ns["display_wiki_entry"].assert_awaited_once_with(
             i, entry, history=[{"type": "home"}, {"type": "map"}]
         )
 
+    async def test_adlucem_pin_uses_current_entry_title(self):
+        i = interaction()
+        view = self.ns["CorunumMapView"](7)
+        view.location_select._values = ["1"]
+        await view.select_location(i)
+        self.ns["get_map_entry"].assert_called_once_with("Adlucem")
+        self.assertIn("#1 Adlucem", i.response.send_message.call_args.args[0])
+
     async def test_other_user_cannot_select_or_navigate(self):
         i = interaction(user_id=8)
         view = self.ns["CorunumMapView"](7, history=[{"type": "home"}])
-        view.location_select._values = ["9"]
+        view.location_select._values = ["13"]
         await view.select_location(i)
         self.ns["get_map_entry"].assert_not_called()
         await view.go_back(i)
