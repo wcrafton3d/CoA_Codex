@@ -1,6 +1,6 @@
 # CoA Codex --- Project Context
 
-**Last updated:** 2026-11-07\
+**Last updated:** 2026-11-13\
 **Repository:** `https://github.com/wcrafton3d/CoA_Codex.git`\
 **Application:** Discord fantasy-world Codex/wiki bot\
 **Stack:** Python, discord.py, SQLite
@@ -1301,10 +1301,10 @@ Never commit:
 -   database backups
 -   accidental OS metadata
 
-The local `assets/` directory is also ignored. It contains artwork intended
-to populate entry `image_url` values after external image hosting is chosen;
-the files are not runtime dependencies and must remain outside application
-commits and deployment bundles.
+The local `assets/` directory is also ignored. It contains source artwork
+and images intended for entry `image_url` values after external hosting is
+chosen. These files remain outside application commits and deployment
+bundles. Approved artwork needed at runtime is copied into tracked `static/`.
 
 Keep feature commits focused.
 
@@ -1389,7 +1389,7 @@ behavior.
 
 ## 26. Immediate handoff summary
 
-As of 2026-10-02:
+As of 2026-11-13:
 
 -   Phase 1 category registry: **complete/deployed**
 -   Phase 2 image support: **complete/deployed/production-tested**
@@ -1417,15 +1417,19 @@ As of 2026-10-02:
 -   Animated home banner: **committed as `4d295e9`, pushed, deployed, and
     connected on OCI; all 66 tests pass locally and on OCI; final visual
     `/wiki-home` banner appearance was accepted by the user on 2026-11-07**
+-   Corunum map integration: **implemented locally on 2026-11-13; 24 pins,
+    map picker, and navigation; committed as `0ce3e23`, pushed, and deployed;
+    72 offline tests pass locally and on OCI; live visual check pending**.
+    See Section 29.
 -   `PROJECT_CONTEXT.md`: **tracked; deployment checkpoint recorded**
--   Local bot: **stopped**; OCI: **active and connected on the animated
-    home-banner deployment with verified database integrity**.
+-   Local bot: **stopped**; OCI: **active and connected on the Corunum map
+    deployment with verified database integrity**.
 -   Treat OCI as the live bot until explicitly stopped.
 -   Do not start local while production is live.
 
-**Next development action:** verify in Discord that **Keep Current Category**
-opens the edit modal without changing the entry's category, then record the
-visual result.
+**Next development action:** verify `/wiki-map`, the home Map button, entry
+selection, missing-entry messages, and Back/Home navigation in the Discord
+Test Server, then record the visual result.
 
 ## 27. Maintenance rule
 
@@ -1461,3 +1465,50 @@ Each Skill reads this document and current project state before acting.
 Automatic selection remains enabled by default. These are project workflow
 instructions; creating them did not change application code, deploy a release,
 or start either bot. The banner appearance was later accepted on 2026-11-07.
+
+## 29. Corunum map integration --- local checkpoint, 2026-11-13
+
+The user accepted `assets/codex-images/corunum-landmarks-v5-enhanced-2x.png`
+as the map artwork. The local implementation adds a 2508 × 2508 pinned JPEG
+under tracked `static/`, derived from that artwork. Pin centers are exactly
+twice the measured centers of the corresponding dots in the 1254 × 1254
+overlay. The location manifest in `static/corunum-map-locations.json` records
+the 24 names, numbers, and source coordinates from the current local key.
+Numbers 1, 11, and 22 have no listings in that key and receive no pins.
+
+`/wiki-map` and the Codex home Map button open the pinned image and a
+24-option location picker. A selected pin resolves its Codex entry by current
+title, so an entry created later can become available without changing the
+map. Missing entries produce an ephemeral notice and leave the map open.
+Readers can return to the map from a selected entry with Back; the map also
+has Back and Home controls. The `static/` map is a runtime asset, whereas
+the original artwork remains in ignored `assets/`.
+
+Before release, local Python 3.10 compilation, all 72 offline tests,
+`git diff --check`, and an isolated startup smoke check passed. The startup
+check confirmed `/wiki-map` registration and a 24-option map view without
+starting a live bot.
+
+### Map deployment checkpoint --- 2026-11-13
+
+-   The map code, coordinate manifest, 1,944,357-byte runtime JPEG, and tests
+    were committed as `0ce3e23` and pushed to GitHub `main`. The public raw
+    image returned `200`, `Content-Type: image/jpeg`, and the expected size.
+    Ignored `assets/` and unrelated `.agents/`, `tmp/`, and `tools/` were not
+    included.
+-   OCI was inspected at prior HEAD `a8eef73`, with no tracked changes and an
+    active service. Its existing untracked `.venv/` and database backups were
+    preserved. The verified Git bundle fast-forwarded the checkout to
+    `0ce3e23`.
+-   OCI Python 3.12.3 compiled the bot and passed all 72 offline tests before
+    restart. The local Python bot was stopped. `coa-codex.service` restarted
+    at 15:25:00 UTC (10:25:00 AM EST), remained active with PID 1015560, and
+    connected to the Discord gateway at 15:25:02 UTC. The deployed HEAD was
+    verified as `0ce3e23`.
+-   Database counts before and after were 70 entries, 84 pages, six
+    categories, and 68 relationships. `integrity_check` returned `ok` and
+    `foreign_key_check` returned no rows. This release changes no schema or
+    database write path, so no new SQLite backup was created.
+-   Live Discord visual verification remains pending. Check image loading,
+    pin legibility at normal view and zoom, the 24-option picker, an existing
+    entry, a missing entry, and Back/Home behavior in the Test Server.
