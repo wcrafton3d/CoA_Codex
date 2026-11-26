@@ -1558,3 +1558,20 @@ from the same approved artwork. No other location or bot behavior changed.
     the Location category. This update changes no schema or database write
     path, so no new SQLite backup was created.
 -   Discord visual verification of the deployed revised map remains pending.
+
+## 31. Solmaro desert and Shrine of Myvilion --- 2026-11-25 EST
+
+The approved artwork adds desert around Solmaro and the Shrine of Myvilion,
+with a small lake and compact ridge beside the preserved river near Emeritus.
+The bot uses the approved 1254 × 1254 PNG and lists the shrine as pin 25.
+The manifest records the reference overlay dot center; the artwork retains
+the approved badge above the shrine.
+
+Release `3fae567` was pushed to GitHub and deployed to OCI by verified Git
+bundle. The public PNG returned HTTP 200. Compilation and all 73 offline
+tests passed locally and on OCI. `coa-codex.service` restarted at 8:34:14 PM
+EST (2026-11-26 01:34:14 UTC) and connected to the Discord gateway. Counts
+remained 72 entries, 87 pages, six categories, and 68 relationships. SQLite
+integrity and foreign keys passed, and bootstrap was complete. No backup was
+needed for this image and picker update. Live Discord visual verification
+of the new map and shrine option remains pending.
