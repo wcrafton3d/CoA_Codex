@@ -22,5 +22,6 @@
   {"number": 21, "name": "Tevok", "x": 601.5, "y": 803.5},
   {"number": 22, "name": "Thornmere", "x": 518.5, "y": 576.5},
   {"number": 23, "name": "Turick", "x": 988.5, "y": 749.5},
-  {"number": 24, "name": "Vrandis", "x": 556.5, "y": 998.5}
+  {"number": 24, "name": "Vrandis", "x": 556.5, "y": 998.5},
+  {"number": 25, "name": "Shrine of Myvilion", "x": 662.5, "y": 510.5}
 ]

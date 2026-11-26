@@ -57,9 +57,9 @@ class CorunumMapTests(unittest.IsolatedAsyncioTestCase):
         self.ns["get_map_entry"] = Mock(return_value=None)
 
     async def test_all_documented_pins_have_unique_picker_options(self):
-        self.assertEqual(len(LOCATIONS), 24)
+        self.assertEqual(len(LOCATIONS), 25)
         self.assertEqual(
-            [item["number"] for item in LOCATIONS], list(range(1, 25))
+            [item["number"] for item in LOCATIONS], list(range(1, 26))
         )
         self.assertEqual(LOCATIONS[0]["name"], "Adlucem")
         i = interaction()
@@ -68,7 +68,8 @@ class CorunumMapTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call.kwargs["embed"].image.url,
                          self.ns["CORUNUM_MAP_URL"])
         view = call.kwargs["view"]
-        self.assertEqual(len(view.location_select.options), 24)
+        self.assertEqual(len(view.location_select.options), 25)
+        self.assertEqual(view.location_select.options[-1].label, "#25 Shrine of Myvilion")
 
     async def test_missing_entry_leaves_map_open(self):
         i = interaction()
